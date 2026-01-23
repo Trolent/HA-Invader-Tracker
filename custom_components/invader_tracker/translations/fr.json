@@ -1,0 +1,82 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Compte Flash Invader",
+        "description": "Entrez votre UID Flash Invader. Vous pouvez le trouver dans les paramètres de l'application ou en capturant le trafic réseau de l'application Flash Invader.",
+        "data": {
+          "uid": "UID Flash Invader"
+        }
+      },
+      "cities": {
+        "title": "Sélectionner les villes",
+        "description": "Choisissez les villes à suivre. Vous pourrez modifier cela plus tard dans les options de l'intégration.",
+        "data": {
+          "cities": "Villes à suivre",
+          "scrape_interval": "Fréquence de mise à jour Invader-Spotter",
+          "api_interval": "Fréquence de mise à jour du statut Flash"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Ré-authentification",
+        "description": "Votre UID Flash Invader n'est plus valide. Veuillez entrer un nouvel UID.",
+        "data": {
+          "uid": "UID Flash Invader"
+        }
+      }
+    },
+    "error": {
+      "invalid_uid": "UID invalide. Veuillez vérifier et réessayer.",
+      "invalid_uid_format": "L'UID doit être au format UUID (ex: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX).",
+      "cannot_connect": "Impossible de se connecter aux serveurs Flash Invader. Vérifiez votre connexion internet.",
+      "cannot_connect_spotter": "Impossible de se connecter à invader-spotter.art. Le site est peut-être indisponible.",
+      "no_cities_selected": "Veuillez sélectionner au moins une ville à suivre.",
+      "no_cities_found": "Aucune ville trouvée sur invader-spotter.art.",
+      "unknown": "Une erreur inattendue s'est produite. Veuillez réessayer."
+    },
+    "abort": {
+      "already_configured": "Ce compte Flash Invader est déjà configuré.",
+      "reauth_successful": "Ré-authentification réussie."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options Invader Tracker",
+        "description": "Configurez les villes à suivre et les fréquences de mise à jour.",
+        "data": {
+          "cities": "Villes à suivre",
+          "scrape_interval": "Fréquence de mise à jour Invader-Spotter",
+          "api_interval": "Fréquence de mise à jour du statut Flash"
+        }
+      }
+    },
+    "error": {
+      "no_cities_selected": "Veuillez sélectionner au moins une ville à suivre."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "total": {
+        "name": "Total Invaders"
+      },
+      "flashed": {
+        "name": "Flashés"
+      },
+      "unflashed": {
+        "name": "Non flashés (Disponibles)"
+      },
+      "unflashed_gone": {
+        "name": "Non flashés (Disparus)"
+      },
+      "new": {
+        "name": "Nouveaux et Réactivés"
+      }
+    },
+    "binary_sensor": {
+      "has_new": {
+        "name": "Nouveaux Invaders"
+      }
+    }
+  }
+}

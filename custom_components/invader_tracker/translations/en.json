@@ -1,0 +1,82 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Flash Invader Account",
+        "description": "Enter your Flash Invader UID. You can find this in the app settings or by capturing network traffic from the Flash Invader app.",
+        "data": {
+          "uid": "Flash Invader UID"
+        }
+      },
+      "cities": {
+        "title": "Select Cities",
+        "description": "Choose which cities to track. You can change this later in integration options.",
+        "data": {
+          "cities": "Cities to track",
+          "scrape_interval": "Invader-Spotter update frequency",
+          "api_interval": "Flash status update frequency"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate",
+        "description": "Your Flash Invader UID is no longer valid. Please enter a new UID.",
+        "data": {
+          "uid": "Flash Invader UID"
+        }
+      }
+    },
+    "error": {
+      "invalid_uid": "Invalid UID. Please check and try again.",
+      "invalid_uid_format": "UID must be in UUID format (e.g., XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX).",
+      "cannot_connect": "Cannot connect to Flash Invader servers. Check your internet connection.",
+      "cannot_connect_spotter": "Cannot connect to invader-spotter.art. The site may be down.",
+      "no_cities_selected": "Please select at least one city to track.",
+      "no_cities_found": "No cities found on invader-spotter.art.",
+      "unknown": "An unexpected error occurred. Please try again."
+    },
+    "abort": {
+      "already_configured": "This Flash Invader account is already configured.",
+      "reauth_successful": "Re-authentication successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Invader Tracker Options",
+        "description": "Configure which cities to track and update frequencies.",
+        "data": {
+          "cities": "Cities to track",
+          "scrape_interval": "Invader-Spotter update frequency",
+          "api_interval": "Flash status update frequency"
+        }
+      }
+    },
+    "error": {
+      "no_cities_selected": "Please select at least one city to track."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "total": {
+        "name": "Total Invaders"
+      },
+      "flashed": {
+        "name": "Flashed"
+      },
+      "unflashed": {
+        "name": "Unflashed (Available)"
+      },
+      "unflashed_gone": {
+        "name": "Unflashed (Gone)"
+      },
+      "new": {
+        "name": "New & Reactivated"
+      }
+    },
+    "binary_sensor": {
+      "has_new": {
+        "name": "Has New Invaders"
+      }
+    }
+  }
+}
