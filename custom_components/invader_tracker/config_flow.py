@@ -251,6 +251,19 @@ class InvaderTrackerOptionsFlow(OptionsFlow):
         self._config_entry = config_entry
         self._cities: dict[str, str] = {}
 
+    def _get_current_cities(self) -> dict[str, str]:
+        """Get currently configured cities (options override data)."""
+        return (
+            self._config_entry.options.get(CONF_CITIES)
+            or self._config_entry.data.get(CONF_CITIES, {})
+        )
+
+    def _get_current_value(self, key: str, default: Any) -> Any:
+        """Get current config value (options override data)."""
+        return self._config_entry.options.get(
+            key, self._config_entry.data.get(key, default)
+        )
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -274,13 +287,13 @@ class InvaderTrackerOptionsFlow(OptionsFlow):
                         CONF_CITIES: cities,
                         CONF_SCRAPE_INTERVAL: user_input.get(
                             CONF_SCRAPE_INTERVAL,
-                            self._config_entry.data.get(
+                            self._get_current_value(
                                 CONF_SCRAPE_INTERVAL, DEFAULT_SCRAPE_INTERVAL_HOURS
                             ),
                         ),
                         CONF_API_INTERVAL: user_input.get(
                             CONF_API_INTERVAL,
-                            self._config_entry.data.get(
+                            self._get_current_value(
                                 CONF_API_INTERVAL, DEFAULT_API_INTERVAL_HOURS
                             ),
                         ),
@@ -297,10 +310,10 @@ class InvaderTrackerOptionsFlow(OptionsFlow):
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Error fetching cities for options")
             # Use previously configured cities as fallback
-            self._cities = self._config_entry.data.get(CONF_CITIES, {})
+            self._cities = self._get_current_cities()
 
-        # Get currently selected cities
-        current_cities = list(self._config_entry.data.get(CONF_CITIES, {}).keys())
+        # Get currently selected cities (from options first, then data)
+        current_cities = list(self._get_current_cities().keys())
 
         # Sort cities by name for display
         city_options = dict(sorted(self._cities.items(), key=lambda x: x[1]))
@@ -314,13 +327,13 @@ class InvaderTrackerOptionsFlow(OptionsFlow):
                     ): cv.multi_select(city_options),
                     vol.Optional(
                         CONF_SCRAPE_INTERVAL,
-                        default=self._config_entry.data.get(
+                        default=self._get_current_value(
                             CONF_SCRAPE_INTERVAL, DEFAULT_SCRAPE_INTERVAL_HOURS
                         ),
                     ): vol.In(INTERVAL_OPTIONS),
                     vol.Optional(
                         CONF_API_INTERVAL,
-                        default=self._config_entry.data.get(
+                        default=self._get_current_value(
                             CONF_API_INTERVAL, DEFAULT_API_INTERVAL_HOURS
                         ),
                     ): vol.In(API_INTERVAL_OPTIONS),
