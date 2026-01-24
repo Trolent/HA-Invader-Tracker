@@ -10,9 +10,11 @@ class InvaderStatus(Enum):
     """Status from invader-spotter community data."""
 
     OK = "ok"  # Intact, flashable
-    DAMAGED = "damaged"  # Partially damaged, may be flashable
-    DESTROYED = "destroyed"  # Gone, unflashable
-    UNKNOWN = "unknown"  # No recent report
+    DAMAGED = "damaged"  # Dégradé, flashable
+    VERY_DAMAGED = "very_damaged"  # Très dégradé, flashable
+    DESTROYED = "destroyed"  # Détruit, NOT flashable
+    NOT_VISIBLE = "not_visible"  # Non visible, NOT flashable
+    UNKNOWN = "unknown"  # Inconnu, NOT flashable
 
 
 @dataclass
@@ -31,7 +33,8 @@ class Invader:
     @property
     def is_flashable(self) -> bool:
         """Can this invader still be flashed?"""
-        return self.status in (InvaderStatus.OK, InvaderStatus.DAMAGED)
+        # Only OK, DAMAGED, and VERY_DAMAGED are flashable
+        return self.status in (InvaderStatus.OK, InvaderStatus.DAMAGED, InvaderStatus.VERY_DAMAGED)
 
 
 @dataclass
