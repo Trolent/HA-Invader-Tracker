@@ -1,6 +1,7 @@
 """Invader Spotter scraper."""
 from __future__ import annotations
 
+import asyncio
 import html
 import logging
 import re
@@ -24,16 +25,25 @@ INVADER_ID_PATTERN = re.compile(r"^[A-Z]{2,5}_\d{1,4}$")
 POINTS_PATTERN = re.compile(r"\[(\d+)\s*pts?\]", re.IGNORECASE)
 DATE_PATTERN_FR = re.compile(r"(\d{1,2})/(\d{1,2})/(\d{4})")
 
-# Status mappings (French to enum)
+# Status mappings (French to enum) - based on invader-spotter.art values
+# Flashable: OK, Dégradé, Très dégradé
+# NOT flashable: Détruit, Non visible, Inconnu
 STATUS_MAPPING: dict[str, InvaderStatus] = {
+    # OK status
     "ok": InvaderStatus.OK,
     "intact": InvaderStatus.OK,
+    # Damaged (flashable)
     "dégradé": InvaderStatus.DAMAGED,
-    "abîmé": InvaderStatus.DAMAGED,
-    "endommagé": InvaderStatus.DAMAGED,
+    "un peu dégradé": InvaderStatus.DAMAGED,
+    # Very damaged (flashable)
+    "très dégradé": InvaderStatus.VERY_DAMAGED,
+    # Destroyed (NOT flashable)
     "détruit": InvaderStatus.DESTROYED,
+    "détruit !": InvaderStatus.DESTROYED,
     "disparu": InvaderStatus.DESTROYED,
-    "retiré": InvaderStatus.DESTROYED,
+    # Not visible (NOT flashable)
+    "non visible": InvaderStatus.NOT_VISIBLE,
+    # Unknown (NOT flashable)
     "inconnu": InvaderStatus.UNKNOWN,
 }
 
@@ -121,7 +131,7 @@ class InvaderSpotterScraper:
         return cities
 
     async def get_city_invaders(self, city_code: str, city_name: str = "") -> list[Invader]:
-        """Scrape all invaders for a city.
+        """Scrape all invaders for a city (handles pagination).
 
         Args:
             city_code: City code (e.g., "PA", "LYN")
@@ -136,23 +146,74 @@ class InvaderSpotterScraper:
 
         """
         _LOGGER.debug("Fetching invaders for city %s", city_code)
-        url = f"{INVADER_SPOTTER_BASE_URL}/ville.php?ville={city_code}"
+        
+        all_invaders: list[Invader] = []
+        page = 1
+        max_pages = 100  # Safety limit
+        
+        while page <= max_pages:
+            invaders, has_more = await self._fetch_city_page(
+                city_code, city_name, page
+            )
+            all_invaders.extend(invaders)
+            
+            if not has_more or not invaders:
+                break
+            
+            page += 1
+            # Small delay between pages to be respectful
+            await asyncio.sleep(0.5)
+        
+        _LOGGER.debug(
+            "Fetched total %d invaders for %s across %d pages",
+            len(all_invaders), city_code, page
+        )
+        return all_invaders
+
+    async def _fetch_city_page(
+        self, city_code: str, city_name: str, page: int
+    ) -> tuple[list[Invader], bool]:
+        """Fetch a single page of invaders for a city.
+        
+        Returns:
+            Tuple of (invaders list, has_more_pages)
+        """
+        url = f"{INVADER_SPOTTER_BASE_URL}/listing.php"
+        
+        # The site requires POST with specific form data
+        data = {
+            "ville": city_code,
+            "arron": "00",
+            "mode": "lst",
+            "page": str(page),
+        }
+        headers = {
+            "Referer": f"{INVADER_SPOTTER_BASE_URL}/villes.php",
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
 
         try:
-            async with self._session.get(
+            async with self._session.post(
                 url,
+                data=data,
+                headers=headers,
                 timeout=aiohttp.ClientTimeout(total=60),
             ) as response:
                 if response.status != 200:
                     raise InvaderSpotterConnectionError(
-                        f"HTTP {response.status} for city {city_code}"
+                        f"HTTP {response.status} for city {city_code} page {page}"
                     )
 
                 html_content = await response.text()
-                return self._parse_city_page(html_content, city_code, city_name)
+                invaders = self._parse_city_page(html_content, city_code, city_name)
+                
+                # Check if there are more pages
+                has_more = self._has_next_page(html_content, page)
+                
+                return invaders, has_more
 
         except TimeoutError as err:
-            _LOGGER.warning("Invader Spotter timeout for city %s", city_code)
+            _LOGGER.warning("Invader Spotter timeout for city %s page %d", city_code, page)
             raise InvaderSpotterConnectionError(f"Timeout for {city_code}") from err
 
         except aiohttp.ClientError as err:
@@ -162,6 +223,12 @@ class InvaderSpotterScraper:
                 type(err).__name__,
             )
             raise InvaderSpotterConnectionError(str(err)) from err
+
+    def _has_next_page(self, html_content: str, current_page: int) -> bool:
+        """Check if there's a next page of results."""
+        # Look for pagination links like changepage(N) where N > current_page
+        pattern = rf"changepage\({current_page + 1}\)"
+        return bool(re.search(pattern, html_content))
 
     def _parse_city_page(
         self, html_content: str, city_code: str, city_name: str
@@ -214,26 +281,28 @@ class InvaderSpotterScraper:
         return invaders
 
     def _find_invader_entries(self, soup: BeautifulSoup) -> list:
-        """Find invader entry elements using multiple strategies."""
-        # Strategy 1: Look for links to invader.php
+        """Find invader entry elements - each invader is in a <td> with rowspan."""
         entries = []
-        for link in soup.find_all("a", href=True):
-            href = link.get("href", "")
-            if "invader.php" in href or re.match(r"[A-Z]{2,5}_\d+", link.get_text(strip=True)):
-                # Get the parent container that has the full info
-                parent = link.find_parent(["div", "tr", "li", "p"])
-                if parent and parent not in entries:
-                    entries.append(parent)
-
+        
+        # The site structure: each invader is in a <td align="left" rowspan="2">
+        # containing <b>XX_NN [pts]</b> and other info
+        for td in soup.find_all("td", {"rowspan": "2"}):
+            # Check if this td contains an invader ID pattern
+            text = td.get_text()
+            if re.search(r"[A-Z]{2,5}_\d{1,4}", text):
+                entries.append(td)
+        
         if entries:
             return entries
 
-        # Strategy 2: Look for text patterns matching invader IDs
-        text_pattern = re.compile(r"[A-Z]{2,5}_\d{1,4}")
-        for element in soup.find_all(string=text_pattern):
-            parent = element.find_parent(["div", "tr", "li", "p"])
-            if parent and parent not in entries:
-                entries.append(parent)
+        # Fallback: Look for <b> tags with invader IDs
+        for bold in soup.find_all("b"):
+            text = bold.get_text()
+            if re.search(r"[A-Z]{2,5}_\d{1,4}\s*\[\d+\s*pts?\]", text, re.IGNORECASE):
+                # Get the parent td
+                parent = bold.find_parent("td")
+                if parent and parent not in entries:
+                    entries.append(parent)
 
         return entries
 
@@ -242,6 +311,7 @@ class InvaderSpotterScraper:
     ) -> Invader | None:
         """Parse a single invader entry."""
         text = entry.get_text(" ", strip=True)
+        html_str = str(entry)
 
         # Extract invader ID
         inv_id = self._extract_invader_id(text, city_code)
@@ -251,8 +321,8 @@ class InvaderSpotterScraper:
         # Extract points
         points = self._extract_points(text)
 
-        # Extract status
-        status = self._extract_status(text)
+        # Extract status from images or text
+        status = self._extract_status_from_html(html_str, text)
 
         # Extract install date
         install_date = self._extract_date(text)
@@ -297,6 +367,29 @@ class InvaderSpotterScraper:
             except ValueError:
                 pass
         return 0
+
+    def _extract_status_from_html(self, html_str: str, text: str) -> InvaderStatus:
+        """Extract status from HTML (checking images) or text."""
+        html_lower = html_str.lower()
+        text_lower = text.lower()
+        
+        # Check for status images first (more reliable)
+        if "spot_invader_destroyed" in html_lower:
+            return InvaderStatus.DESTROYED
+        if "spot_invader_degraded" in html_lower:
+            # Need to distinguish between "dégradé" and "très dégradé"
+            if "très dégradé" in text_lower:
+                return InvaderStatus.VERY_DAMAGED
+            return InvaderStatus.DAMAGED
+        if "spot_invader_ok" in html_lower:
+            return InvaderStatus.OK
+        if "spot_invader_unknown" in html_lower:
+            return InvaderStatus.UNKNOWN
+        if "spot_invader_notvisible" in html_lower or "non visible" in text_lower:
+            return InvaderStatus.NOT_VISIBLE
+        
+        # Fallback to text-based extraction
+        return self._extract_status(text)
 
     def _extract_status(self, text: str) -> InvaderStatus:
         """Extract status from text."""
