@@ -17,7 +17,7 @@ from .exceptions import (
     ParseError,
     RateLimitError,
 )
-from .models import FlashedInvader, Invader
+from .models import FlashedInvader, Invader, NewsEvent
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -58,6 +58,9 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
         self._update_interval_hours = update_interval_hours
         # Cache: city_code -> (timestamp, list[Invader])
         self._city_cache: dict[str, tuple[datetime, list[Invader]]] = {}
+        # News events cache: (timestamp, list[NewsEvent])
+        self._news_cache: tuple[datetime, list[NewsEvent]] | None = None
+        self._news_cache_hours: int = 6  # Cache news for 6 hours
 
     @property
     def cities(self) -> dict[str, str]:
@@ -191,6 +194,56 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
         
         # Trigger a refresh
         await self.async_request_refresh()
+
+    async def get_news_events(self, days: int = 30) -> list[NewsEvent]:
+        """Get news events from invader-spotter.art/news.php.
+        
+        Uses caching to avoid hitting the site too frequently.
+        
+        Args:
+            days: Number of days of news to fetch
+            
+        Returns:
+            List of NewsEvent objects
+        """
+        # Check cache
+        if self._news_cache is not None:
+            cached_time, cached_events = self._news_cache
+            age = datetime.now() - cached_time
+            if age < timedelta(hours=self._news_cache_hours):
+                _LOGGER.debug("Using cached news (%d events)", len(cached_events))
+                return cached_events
+        
+        try:
+            # Get news filtered by our tracked cities
+            city_codes = set(self._cities.keys())
+            events = await self._scraper.get_news(days=days, city_codes=city_codes)
+            
+            # Update cache
+            self._news_cache = (datetime.now(), events)
+            _LOGGER.info("Fetched %d news events for tracked cities", len(events))
+            
+            return events
+            
+        except Exception as err:
+            _LOGGER.warning("Failed to fetch news: %s", err)
+            # Return cached events if available
+            if self._news_cache is not None:
+                _, cached_events = self._news_cache
+                return cached_events
+            return []
+
+    def get_news_for_city(self, city_code: str, events: list[NewsEvent]) -> list[NewsEvent]:
+        """Filter news events for a specific city.
+        
+        Args:
+            city_code: City code to filter by
+            events: List of all news events
+            
+        Returns:
+            List of NewsEvent for this city
+        """
+        return [e for e in events if e.city_code == city_code]
 
 
 class FlashInvaderCoordinator(DataUpdateCoordinator[list[FlashedInvader]]):

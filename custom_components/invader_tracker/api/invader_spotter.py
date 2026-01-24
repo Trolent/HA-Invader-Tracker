@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup
 
 from ..const import INVADER_SPOTTER_BASE_URL
 from ..exceptions import InvaderSpotterConnectionError, ParseError
-from ..models import City, Invader, InvaderStatus
+from ..models import City, Invader, InvaderStatus, NewsEvent, NewsEventType
 
 if TYPE_CHECKING:
     pass
@@ -24,6 +24,31 @@ _LOGGER = logging.getLogger(__name__)
 INVADER_ID_PATTERN = re.compile(r"^[A-Z]{2,5}_\d{1,4}$")
 POINTS_PATTERN = re.compile(r"\[(\d+)\s*pts?\]", re.IGNORECASE)
 DATE_PATTERN_FR = re.compile(r"(\d{1,2})/(\d{1,2})/(\d{4})")
+
+# Pattern to extract invader IDs from news links: javascript:lienm("PA12",1554)
+NEWS_INVADER_PATTERN = re.compile(r'javascript:lienm\("([A-Z]+)\d*",(\d+)\)')
+# Pattern for month headers: "janvier 2026"
+MONTH_PATTERN = re.compile(
+    r"(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre)\s+(\d{4})",
+    re.IGNORECASE,
+)
+# Month name to number mapping
+MONTH_NAMES = {
+    "janvier": 1, "février": 2, "mars": 3, "avril": 4,
+    "mai": 5, "juin": 6, "juillet": 7, "août": 8,
+    "septembre": 9, "octobre": 10, "novembre": 11, "décembre": 12,
+}
+
+# News event type keywords (French)
+NEWS_EVENT_KEYWORDS = {
+    "ajout": NewsEventType.ADDED,
+    "réactivation": NewsEventType.REACTIVATED,
+    "restauration": NewsEventType.RESTORED,
+    "dégradation": NewsEventType.DEGRADED,
+    "destruction": NewsEventType.DESTROYED,
+    "mise à jour": NewsEventType.STATUS_UPDATE,
+    "alerte": NewsEventType.ALERT,
+}
 
 # Status mappings (French to enum) - based on invader-spotter.art values
 # Flashable: OK, Dégradé, Très dégradé
@@ -422,3 +447,199 @@ class InvaderSpotterScraper:
             except ValueError:
                 pass
         return None
+
+    async def get_news(
+        self,
+        days: int = 30,
+        city_codes: set[str] | None = None,
+    ) -> list[NewsEvent]:
+        """Scrape news from invader-spotter.art/news.php.
+
+        Args:
+            days: Number of days of news to fetch (default 30)
+            city_codes: Optional set of city codes to filter by
+
+        Returns:
+            List of NewsEvent objects, most recent first
+
+        Raises:
+            InvaderSpotterConnectionError: If connection fails
+            ParseError: If page cannot be parsed
+
+        """
+        _LOGGER.debug("Fetching news from invader-spotter.art (last %d days)", days)
+        url = f"{INVADER_SPOTTER_BASE_URL}/news.php"
+
+        try:
+            async with self._session.get(
+                url,
+                timeout=aiohttp.ClientTimeout(total=60),
+            ) as response:
+                if response.status != 200:
+                    raise InvaderSpotterConnectionError(
+                        f"HTTP {response.status} fetching news"
+                    )
+                html_content = await response.text()
+
+        except aiohttp.ClientError as err:
+            raise InvaderSpotterConnectionError(f"Connection error: {err}") from err
+        except asyncio.TimeoutError as err:
+            raise InvaderSpotterConnectionError("Timeout fetching news") from err
+
+        return self._parse_news(html_content, days, city_codes)
+
+    def _parse_news(
+        self,
+        html_content: str,
+        days: int,
+        city_codes: set[str] | None,
+    ) -> list[NewsEvent]:
+        """Parse news HTML content.
+
+        Args:
+            html_content: Raw HTML
+            days: Number of days to include
+            city_codes: Optional city filter
+
+        Returns:
+            List of NewsEvent objects
+
+        """
+        from datetime import timedelta
+
+        soup = BeautifulSoup(html_content, "html.parser")
+        events: list[NewsEvent] = []
+        cutoff_date = datetime.now().date() - timedelta(days=days)
+
+        current_year: int | None = None
+        current_month: int | None = None
+
+        # Find all text content that contains news
+        # The page structure has months as headers followed by day entries
+        content = soup.get_text()
+        lines = content.split("\n")
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            # Check for month header (e.g., "janvier 2026")
+            month_match = MONTH_PATTERN.search(line)
+            if month_match:
+                month_name = month_match.group(1).lower()
+                current_year = int(month_match.group(2))
+                current_month = MONTH_NAMES.get(month_name)
+                continue
+
+            # Check for day entry (starts with "DD :")
+            day_match = re.match(r"^(\d{1,2})\s*:", line)
+            if day_match and current_year and current_month:
+                day = int(day_match.group(1))
+                try:
+                    event_date = datetime(current_year, current_month, day).date()
+                except ValueError:
+                    continue
+
+                # Skip if before cutoff
+                if event_date < cutoff_date:
+                    continue
+
+                # Parse events from this line
+                line_events = self._parse_news_line(line, event_date, city_codes)
+                events.extend(line_events)
+
+        _LOGGER.debug("Parsed %d news events", len(events))
+        return events
+
+    def _parse_news_line(
+        self,
+        line: str,
+        event_date: datetime,
+        city_codes: set[str] | None,
+    ) -> list[NewsEvent]:
+        """Parse a single news line for events.
+
+        A news line can contain multiple event types separated by periods.
+        Example: "Réactivation de PA_08. Destruction de PA_834"
+
+        Args:
+            line: The news line text
+            event_date: Date of this news entry
+            city_codes: Optional city filter
+
+        Returns:
+            List of NewsEvent objects found in this line
+
+        """
+        events: list[NewsEvent] = []
+
+        # Split line into segments by periods (but keep segments together)
+        # Each segment may have a different event type
+        segments = re.split(r"\.(?=\s*[A-ZÀ-Ü])", line)
+
+        for segment in segments:
+            segment = segment.strip()
+            if not segment:
+                continue
+
+            segment_lower = segment.lower()
+
+            # Determine event type for this segment
+            event_type: NewsEventType | None = None
+            for keyword, etype in NEWS_EVENT_KEYWORDS.items():
+                if keyword in segment_lower:
+                    event_type = etype
+                    break
+
+            if not event_type:
+                continue
+
+            # Find all invader IDs in this segment
+            # Pattern: PA_1554, NY_156, etc.
+            invader_ids = re.findall(r"([A-Z]{2,5}_\d{1,4})", segment)
+
+            for invader_id in invader_ids:
+                # Extract city code from invader ID (e.g., "PA" from "PA_1554")
+                city_code = invader_id.split("_")[0]
+
+                # Filter by city if specified
+                if city_codes and city_code not in city_codes:
+                    continue
+
+                events.append(
+                    NewsEvent(
+                        event_type=event_type,
+                        invader_id=invader_id,
+                        city_code=city_code,
+                        event_date=event_date,
+                        raw_text=segment,
+                    )
+                )
+
+        return events
+
+    async def get_news_for_cities(
+        self,
+        city_codes: set[str],
+        days: int = 30,
+    ) -> dict[str, list[NewsEvent]]:
+        """Get news events grouped by city.
+
+        Args:
+            city_codes: Set of city codes to fetch news for
+            days: Number of days of news to fetch
+
+        Returns:
+            Dict mapping city code to list of NewsEvent
+
+        """
+        all_events = await self.get_news(days=days, city_codes=city_codes)
+
+        # Group by city
+        by_city: dict[str, list[NewsEvent]] = {code: [] for code in city_codes}
+        for event in all_events:
+            if event.city_code in by_city:
+                by_city[event.city_code].append(event)
+
+        return by_city

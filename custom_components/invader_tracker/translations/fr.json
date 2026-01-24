@@ -14,7 +14,8 @@
         "data": {
           "cities": "Villes à suivre",
           "scrape_interval": "Fréquence de mise à jour Invader-Spotter",
-          "api_interval": "Fréquence de mise à jour du statut Flash"
+          "api_interval": "Fréquence de mise à jour du statut Flash",
+          "news_days": "Période de détection nouveau/réactivé"
         }
       },
       "reauth_confirm": {
@@ -47,7 +48,8 @@
         "data": {
           "cities": "Villes à suivre",
           "scrape_interval": "Fréquence de mise à jour Invader-Spotter",
-          "api_interval": "Fréquence de mise à jour du statut Flash"
+          "api_interval": "Fréquence de mise à jour du statut Flash",
+          "news_days": "Période de détection nouveau/réactivé"
         }
       }
     },

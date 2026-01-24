@@ -12,6 +12,8 @@ from .models import (
     FlashedInvader,
     Invader,
     InvaderStatus,
+    NewsEvent,
+    NewsEventType,
     StateSnapshot,
 )
 
@@ -30,6 +32,7 @@ class DataProcessor:
         spotter_coordinator: InvaderSpotterCoordinator,
         flash_coordinator: FlashInvaderCoordinator,
         store: StateStore,
+        news_days: int = 30,
     ) -> None:
         """Initialize the processor.
 
@@ -37,6 +40,7 @@ class DataProcessor:
             spotter_coordinator: Coordinator for invader-spotter data
             flash_coordinator: Coordinator for Flash Invader API data
             store: State storage for snapshots
+            news_days: Number of days to consider for new/reactivated detection
 
         """
         self._spotter = spotter_coordinator
@@ -44,15 +48,21 @@ class DataProcessor:
         self._store = store
         self._previous_snapshot: StateSnapshot | None = None
         self._city_names: dict[str, str] = {}
+        # Cached news events (refreshed by coordinator)
+        self._news_events: list[NewsEvent] = []
+        self._news_days: int = news_days
 
     async def async_initialize(self) -> None:
-        """Load previous snapshot from storage."""
+        """Load previous snapshot from storage and fetch news."""
         self._previous_snapshot = await self._store.async_load_snapshot()
         if self._previous_snapshot:
             _LOGGER.info(
                 "Loaded previous snapshot from %s",
                 self._previous_snapshot.timestamp.isoformat(),
             )
+        
+        # Fetch initial news events
+        await self.async_refresh_news()
 
     def set_city_names(self, city_names: dict[str, str]) -> None:
         """Set city code to name mapping.
@@ -63,8 +73,15 @@ class DataProcessor:
         """
         self._city_names = city_names
 
+    async def async_refresh_news(self) -> None:
+        """Refresh news events from invader-spotter."""
+        self._news_events = await self._spotter.get_news_events(days=self._news_days)
+        _LOGGER.debug("Refreshed news: %d events", len(self._news_events))
+
     def compute_city_stats(self, city_code: str) -> CityStats:
         """Compute full statistics for a city.
+
+        Uses official news.php data for new/reactivated detection.
 
         Args:
             city_code: City code to compute stats for
@@ -75,12 +92,22 @@ class DataProcessor:
         """
         # Get all invaders from spotter coordinator
         all_invaders = self._get_invaders_for_city(city_code)
+        invader_ids = {inv.id for inv in all_invaders}
 
         # Get flashed invaders from flash coordinator
         flashed = self._flash.get_flashed_for_city(city_code)
 
-        # Get changes
-        changes = self.detect_changes(city_code)
+        # Get news events for this city
+        city_news = self._spotter.get_news_for_city(city_code, self._news_events)
+
+        # Extract new and reactivated invaders from news
+        new_invaders = self._get_invaders_from_news(
+            all_invaders, city_news, NewsEventType.ADDED
+        )
+        reactivated_invaders = self._get_invaders_from_news(
+            all_invaders, city_news, 
+            NewsEventType.REACTIVATED, NewsEventType.RESTORED
+        )
 
         # Build city object
         city = City(
@@ -93,9 +120,42 @@ class DataProcessor:
             city=city,
             all_invaders=all_invaders,
             flashed_invaders=flashed,
-            new_invaders=changes.new_invaders,
-            reactivated_invaders=changes.reactivated_invaders,
+            new_invaders=new_invaders,
+            reactivated_invaders=reactivated_invaders,
+            news_events=city_news,
         )
+
+    def _get_invaders_from_news(
+        self,
+        all_invaders: list[Invader],
+        news_events: list[NewsEvent],
+        *event_types: NewsEventType,
+    ) -> list[Invader]:
+        """Get invaders matching news events of specific types.
+
+        Args:
+            all_invaders: List of all invaders in city
+            news_events: News events for the city
+            event_types: Event types to filter by
+
+        Returns:
+            List of Invader objects that had matching news events
+
+        """
+        # Get IDs from news events of the specified types
+        news_ids = {
+            event.invader_id
+            for event in news_events
+            if event.event_type in event_types
+        }
+
+        # Find matching invaders
+        invader_map = {inv.id: inv for inv in all_invaders}
+        return [
+            invader_map[inv_id]
+            for inv_id in news_ids
+            if inv_id in invader_map
+        ]
 
     def _get_invaders_for_city(self, city_code: str) -> list[Invader]:
         """Get invaders for a city from spotter coordinator."""
