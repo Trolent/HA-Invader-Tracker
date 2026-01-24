@@ -103,11 +103,12 @@ class DataProcessor:
             return []
         return self._spotter.data.get(city_code, [])
 
-    def detect_changes(self, city_code: str) -> ChangeSet:
+    def detect_changes(self, city_code: str, recently_added_days: int = 30) -> ChangeSet:
         """Detect new/reactivated invaders since last snapshot.
 
         Args:
             city_code: City code to check
+            recently_added_days: Consider invaders "new" if first seen within N days
 
         Returns:
             ChangeSet with detected changes
@@ -120,20 +121,20 @@ class DataProcessor:
         if not current_invaders:
             return ChangeSet()
 
-        current_ids = {inv.id for inv in current_invaders}
+        # Get recently added invaders (first seen within N days)
+        new_invaders = self._previous_snapshot.get_recently_added(
+            current_invaders, days=recently_added_days
+        )
 
-        # Find new invaders (not in previous snapshot)
-        new_ids = self._previous_snapshot.get_new_invaders(city_code, current_ids)
-        new_invaders = [inv for inv in current_invaders if inv.id in new_ids]
-
-        # Find reactivated invaders (status changed from destroyed to OK)
+        # Get reactivated invaders (status changed from non-flashable to flashable)
         reactivated = self._previous_snapshot.get_reactivated(current_invaders)
 
         if new_invaders or reactivated:
             _LOGGER.info(
-                "Changes detected for %s: %d new, %d reactivated",
+                "Changes for %s: %d recently added (<%d days), %d reactivated",
                 city_code,
                 len(new_invaders),
+                recently_added_days,
                 len(reactivated),
             )
 
@@ -143,27 +144,66 @@ class DataProcessor:
         )
 
     async def async_save_snapshot(self) -> None:
-        """Save current state as snapshot for future comparison."""
+        """Save current state as snapshot for future comparison.
+        
+        This preserves first_seen dates and tracks status changes.
+        """
         if self._spotter.data is None:
             _LOGGER.debug("No spotter data to save")
             return
 
+        now = datetime.now()
+        
+        # Build current IDs and statuses
+        current_ids_by_city = {
+            city: {inv.id for inv in invaders}
+            for city, invaders in self._spotter.data.items()
+        }
+        current_status = {
+            inv.id: inv.status
+            for invaders in self._spotter.data.values()
+            for inv in invaders
+        }
+        
+        # Preserve first_seen dates from previous snapshot, add new ones
+        first_seen = {}
+        if self._previous_snapshot:
+            first_seen = dict(self._previous_snapshot.first_seen_date)
+        
+        # Add first_seen for newly discovered invaders
+        for invaders in self._spotter.data.values():
+            for inv in invaders:
+                if inv.id not in first_seen:
+                    first_seen[inv.id] = now
+                    _LOGGER.debug("New invader discovered: %s", inv.id)
+        
+        # Track previous status (current status becomes previous for next comparison)
+        # Only update if status changed (to preserve history)
+        previous_status = {}
+        if self._previous_snapshot:
+            previous_status = dict(self._previous_snapshot.previous_status)
+        
+        for inv_id, status in current_status.items():
+            old_status = self._previous_snapshot.status_by_invader.get(inv_id) if self._previous_snapshot else None
+            if old_status and old_status != status:
+                # Status changed - record the old status for reactivation detection
+                previous_status[inv_id] = old_status
+                _LOGGER.info(
+                    "Status change detected: %s went from %s to %s",
+                    inv_id, old_status.value, status.value
+                )
+
         snapshot = StateSnapshot(
-            timestamp=datetime.now(),
-            invader_ids_by_city={
-                city: {inv.id for inv in invaders}
-                for city, invaders in self._spotter.data.items()
-            },
-            status_by_invader={
-                inv.id: inv.status
-                for invaders in self._spotter.data.values()
-                for inv in invaders
-            },
+            timestamp=now,
+            invader_ids_by_city=current_ids_by_city,
+            status_by_invader=current_status,
+            first_seen_date=first_seen,
+            previous_status=previous_status,
         )
 
         await self._store.async_save_snapshot(snapshot)
         self._previous_snapshot = snapshot
-        _LOGGER.debug("Saved new snapshot")
+        _LOGGER.debug("Saved snapshot with %d invaders tracked", len(current_status))
 
     def get_all_tracked_cities(self) -> list[str]:
         """Get list of all tracked city codes."""

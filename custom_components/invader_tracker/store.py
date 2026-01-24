@@ -47,6 +47,14 @@ class StateStore:
                 inv_id: status.value
                 for inv_id, status in snapshot.status_by_invader.items()
             },
+            "first_seen_date": {
+                inv_id: dt.isoformat()
+                for inv_id, dt in snapshot.first_seen_date.items()
+            },
+            "previous_status": {
+                inv_id: status.value
+                for inv_id, status in snapshot.previous_status.items()
+            },
         }
 
         await self._store.async_save(data)
@@ -77,6 +85,14 @@ class StateStore:
                 status_by_invader={
                     inv_id: InvaderStatus(status)
                     for inv_id, status in data["status_by_invader"].items()
+                },
+                first_seen_date={
+                    inv_id: datetime.fromisoformat(dt)
+                    for inv_id, dt in data.get("first_seen_date", {}).items()
+                },
+                previous_status={
+                    inv_id: InvaderStatus(status)
+                    for inv_id, status in data.get("previous_status", {}).items()
                 },
             )
             _LOGGER.debug(

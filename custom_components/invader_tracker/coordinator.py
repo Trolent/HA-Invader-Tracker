@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -29,7 +29,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]]):
-    """Coordinator for invader-spotter.art data."""
+    """Coordinator for invader-spotter.art data with smart caching."""
 
     def __init__(
         self,
@@ -55,6 +55,9 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
         )
         self._scraper = scraper
         self._cities = cities
+        self._update_interval_hours = update_interval_hours
+        # Cache: city_code -> (timestamp, list[Invader])
+        self._city_cache: dict[str, tuple[datetime, list[Invader]]] = {}
 
     @property
     def cities(self) -> dict[str, str]:
@@ -68,23 +71,71 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
             cities: New dict mapping city codes to names
 
         """
+        old_cities = set(self._cities.keys())
+        new_cities = set(cities.keys())
+        
+        # Log changes
+        added = new_cities - old_cities
+        removed = old_cities - new_cities
+        
+        if added:
+            _LOGGER.info("New cities added: %s", ", ".join(added))
+        if removed:
+            _LOGGER.info("Cities removed: %s", ", ".join(removed))
+            # Clean up cache for removed cities
+            for city_code in removed:
+                self._city_cache.pop(city_code, None)
+        
         self._cities = cities
 
+    def _is_cache_valid(self, city_code: str) -> bool:
+        """Check if cached data for a city is still valid.
+        
+        Args:
+            city_code: City code to check
+            
+        Returns:
+            True if cache is valid and not expired
+        """
+        if city_code not in self._city_cache:
+            return False
+        
+        cached_time, _ = self._city_cache[city_code]
+        age = datetime.now() - cached_time
+        max_age = timedelta(hours=self._update_interval_hours)
+        
+        return age < max_age
+
     async def _async_update_data(self) -> dict[str, list[Invader]]:
-        """Fetch data from invader-spotter for all tracked cities."""
-        _LOGGER.debug("Starting invader-spotter scrape for %d cities", len(self._cities))
+        """Fetch data from invader-spotter, using cache for unchanged cities."""
+        _LOGGER.debug("Starting invader-spotter update for %d cities", len(self._cities))
 
         result: dict[str, list[Invader]] = {}
         failures: list[str] = []
+        cached_count = 0
+        scraped_count = 0
 
         for i, (city_code, city_name) in enumerate(self._cities.items()):
-            # Polite delay between requests (except first)
-            if i > 0:
+            # Check if we can use cached data
+            if self._is_cache_valid(city_code):
+                _, cached_invaders = self._city_cache[city_code]
+                result[city_code] = cached_invaders
+                cached_count += 1
+                _LOGGER.debug("Using cached data for %s (%d invaders)", city_code, len(cached_invaders))
+                continue
+            
+            # Polite delay between requests (except first scrape)
+            if scraped_count > 0:
                 await asyncio.sleep(CITY_REQUEST_DELAY)
 
             try:
                 invaders = await self._scraper.get_city_invaders(city_code, city_name)
                 result[city_code] = invaders
+                
+                # Update cache
+                self._city_cache[city_code] = (datetime.now(), invaders)
+                scraped_count += 1
+                
                 _LOGGER.debug(
                     "Scraped %s: %d invaders (%d flashable)",
                     city_code,
@@ -96,31 +147,50 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
                 _LOGGER.warning("Failed to scrape %s: %s", city_code, err)
                 failures.append(city_code)
 
-                # Keep previous data for this city if available
-                if self.data and city_code in self.data:
+                # Use cached data if available (even if expired)
+                if city_code in self._city_cache:
+                    _, cached_invaders = self._city_cache[city_code]
+                    result[city_code] = cached_invaders
+                    _LOGGER.info("Using expired cache for %s", city_code)
+                # Or use previous coordinator data
+                elif self.data and city_code in self.data:
                     result[city_code] = self.data[city_code]
-                    _LOGGER.info("Using cached data for %s", city_code)
+                    _LOGGER.info("Using previous data for %s", city_code)
 
-        # If ALL cities failed, raise UpdateFailed
-        if len(failures) == len(self._cities):
+        # If ALL cities failed and no cached data, raise UpdateFailed
+        if len(failures) == len(self._cities) and not result:
             raise UpdateFailed(f"Failed to scrape any cities: {', '.join(failures)}")
 
         # Log summary
+        total_invaders = sum(len(inv) for inv in result.values())
         if failures:
             _LOGGER.warning(
-                "Partial scrape failure: %d/%d cities failed",
-                len(failures),
-                len(self._cities),
+                "Partial update: %d scraped, %d cached, %d failed (%d total invaders)",
+                scraped_count, cached_count, len(failures), total_invaders,
             )
         else:
-            total_invaders = sum(len(inv) for inv in result.values())
             _LOGGER.info(
-                "Scrape complete: %d cities, %d total invaders",
-                len(result),
-                total_invaders,
+                "Update complete: %d scraped, %d cached (%d total invaders)",
+                scraped_count, cached_count, total_invaders,
             )
 
         return result
+    
+    async def async_force_refresh_city(self, city_code: str) -> None:
+        """Force refresh a specific city, bypassing cache.
+        
+        Args:
+            city_code: City code to refresh
+        """
+        if city_code not in self._cities:
+            _LOGGER.warning("Cannot refresh unknown city: %s", city_code)
+            return
+        
+        # Invalidate cache for this city
+        self._city_cache.pop(city_code, None)
+        
+        # Trigger a refresh
+        await self.async_request_refresh()
 
 
 class FlashInvaderCoordinator(DataUpdateCoordinator[list[FlashedInvader]]):
