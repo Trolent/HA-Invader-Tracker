@@ -41,9 +41,7 @@ class FlashInvaderAPI:
     def _headers(self) -> dict[str, str]:
         """Build request headers."""
         return {
-            "uid": self._uid,
             "Accept": "*/*",
-            "User-Agent": "HomeAssistant/InvaderTracker",
             "Origin": "https://pnote.eu",
             "Referer": "https://pnote.eu/",
         }
@@ -66,6 +64,7 @@ class FlashInvaderAPI:
         try:
             async with self._session.get(
                 f"{FLASH_INVADER_BASE_URL}{FLASH_INVADER_ENDPOINT}",
+                params={"uid": self._uid},
                 headers=self._headers,
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as response:
@@ -101,11 +100,17 @@ class FlashInvaderAPI:
             _LOGGER.warning("Flash Invader API: Rate limited")
             raise RateLimitError(int(retry_after) if retry_after else None)
 
+        if response.status == 400:
+            body = await response.text()
+            _LOGGER.error("Flash Invader API: Bad request (400) - UID format may be invalid. Response: %s", body[:200])
+            raise AuthenticationError("Invalid UID format - check that your UID is correct")
+
         if response.status >= 500:
             _LOGGER.warning("Flash Invader API: Server error %d", response.status)
             raise FlashInvaderConnectionError(f"Server error: {response.status}")
 
-        _LOGGER.error("Flash Invader API: Unexpected status %d", response.status)
+        body = await response.text()
+        _LOGGER.error("Flash Invader API: Unexpected status %d. Response: %s", response.status, body[:200])
         raise InvalidResponseError(f"Unexpected status: {response.status}")
 
     async def _parse_response(

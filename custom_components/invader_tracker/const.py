@@ -18,7 +18,7 @@ MIN_API_INTERVAL_HOURS: Final = 1
 MAX_API_INTERVAL_HOURS: Final = 24
 
 # API URLs
-FLASH_INVADER_BASE_URL: Final = "https://space-invaders.com"
+FLASH_INVADER_BASE_URL: Final = "https://api.space-invaders.com"
 FLASH_INVADER_ENDPOINT: Final = "/flashinvaders_v3_pas_trop_predictif/api/gallery"
 INVADER_SPOTTER_BASE_URL: Final = "https://www.invader-spotter.art"
 
