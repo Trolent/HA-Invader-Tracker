@@ -89,26 +89,33 @@ class InvaderSpotterScraper:
         """Parse cities list page."""
         soup = BeautifulSoup(html_content, "html.parser")
         cities: list[City] = []
+        seen_codes: set[str] = set()
 
-        # Look for city links - they typically link to ville.php?ville=XX
+        # Look for city links - they use javascript:envoi("CODE") format
         for link in soup.find_all("a", href=True):
             href = link.get("href", "")
-            if "ville.php?ville=" in href:
-                # Extract city code from URL
-                match = re.search(r"ville\.php\?ville=([A-Z0-9_]+)", href, re.IGNORECASE)
-                if match:
-                    city_code = match.group(1).upper()
-                    city_name = link.get_text(strip=True) or city_code
+            
+            # Match javascript:envoi("CODE") pattern
+            match = re.search(r"javascript:envoi\(['\"]([A-Z0-9_]+)['\"]\)", href, re.IGNORECASE)
+            if match:
+                city_code = match.group(1).upper()
+                
+                # Skip if already seen (avoid duplicates from map and list)
+                if city_code in seen_codes:
+                    continue
+                seen_codes.add(city_code)
+                
+                city_name = link.get_text(strip=True) or city_code
 
-                    # Clean up city name
-                    city_name = html.unescape(city_name)
+                # Clean up city name
+                city_name = html.unescape(city_name)
 
-                    cities.append(
-                        City(
-                            code=city_code,
-                            name=city_name,
-                        )
+                cities.append(
+                    City(
+                        code=city_code,
+                        name=city_name,
                     )
+                )
 
         _LOGGER.debug("Found %d cities", len(cities))
         return cities
