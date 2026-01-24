@@ -14,9 +14,11 @@ from .api.invader_spotter import InvaderSpotterScraper
 from .const import (
     CONF_API_INTERVAL,
     CONF_CITIES,
+    CONF_NEWS_DAYS,
     CONF_SCRAPE_INTERVAL,
     CONF_UID,
     DEFAULT_API_INTERVAL_HOURS,
+    DEFAULT_NEWS_DAYS,
     DEFAULT_SCRAPE_INTERVAL_HOURS,
     DOMAIN,
 )
@@ -53,6 +55,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_API_INTERVAL,
         entry.data.get(CONF_API_INTERVAL, DEFAULT_API_INTERVAL_HOURS)
     )
+    news_days = entry.options.get(
+        CONF_NEWS_DAYS,
+        entry.data.get(CONF_NEWS_DAYS, DEFAULT_NEWS_DAYS)
+    )
 
     # Create API clients
     flash_api = FlashInvaderAPI(session, uid)
@@ -73,7 +79,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Create processor and store
     store = StateStore(hass, entry.entry_id)
-    processor = DataProcessor(spotter_coordinator, flash_coordinator, store)
+    processor = DataProcessor(spotter_coordinator, flash_coordinator, store, news_days)
     processor.set_city_names(cities)
 
     # Initialize processor (load previous snapshot)
@@ -87,10 +93,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Save initial snapshot
     await processor.async_save_snapshot()
 
-    # Set up listener to save snapshot after each spotter update
+    # Set up listener to save snapshot and refresh news after each spotter update
     async def _on_spotter_update() -> None:
-        """Save snapshot when spotter data updates."""
+        """Save snapshot and refresh news when spotter data updates."""
         await processor.async_save_snapshot()
+        await processor.async_refresh_news()
 
     spotter_coordinator.async_add_listener(_on_spotter_update)
 

@@ -14,7 +14,8 @@
         "data": {
           "cities": "Cities to track",
           "scrape_interval": "Invader-Spotter update frequency",
-          "api_interval": "Flash status update frequency"
+          "api_interval": "Flash status update frequency",
+          "news_days": "New/Reactivated detection period"
         }
       },
       "reauth_confirm": {
@@ -47,7 +48,8 @@
         "data": {
           "cities": "Cities to track",
           "scrape_interval": "Invader-Spotter update frequency",
-          "api_interval": "Flash status update frequency"
+          "api_interval": "Flash status update frequency",
+          "news_days": "New/Reactivated detection period"
         }
       }
     },

@@ -306,7 +306,7 @@ class InvaderUnflashedGoneSensor(InvaderBaseSensor):
 
 
 class InvaderNewSensor(InvaderBaseSensor):
-    """Sensor for new and reactivated invaders."""
+    """Sensor for new and reactivated invaders (not yet flashed)."""
 
     _attr_icon = "mdi:new-box"
     _attr_translation_key = "new"
@@ -327,21 +327,54 @@ class InvaderNewSensor(InvaderBaseSensor):
 
     @property
     def native_value(self) -> int | None:
-        """Return the state of the sensor."""
+        """Return the count of unflashed new/reactivated invaders."""
         if not self.available:
             return None
         stats = self._processor.compute_city_stats(self._city_code)
-        return stats.new_count
+        return stats.unflashed_new_count
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes."""
+        """Return extra state attributes with detailed invader lists."""
         if not self.available:
             return {}
         stats = self._processor.compute_city_stats(self._city_code)
+        
+        # Format invader lists with details
+        unflashed_new = [
+            {
+                "id": inv.id,
+                "points": inv.points,
+                "status": inv.status.value,
+            }
+            for inv in stats.unflashed_new
+        ]
+        unflashed_reactivated = [
+            {
+                "id": inv.id,
+                "points": inv.points,
+                "status": inv.status.value,
+            }
+            for inv in stats.unflashed_reactivated
+        ]
+        
+        # Create a simple list of IDs for easy reading
+        to_flash_ids = [inv.id for inv in stats.unflashed_new] + \
+                       [inv.id for inv in stats.unflashed_reactivated]
+        
+        # Calculate potential points
+        potential_points = sum(inv.points for inv in stats.unflashed_new) + \
+                          sum(inv.points for inv in stats.unflashed_reactivated)
+        
         return {
-            "new_invaders": [inv.id for inv in stats.new_invaders],
-            "reactivated_invaders": [inv.id for inv in stats.reactivated_invaders],
-            "new_count": len(stats.new_invaders),
-            "reactivated_count": len(stats.reactivated_invaders),
+            "to_flash": to_flash_ids,  # Simple list of IDs to flash
+            "to_flash_formatted": ", ".join(to_flash_ids) if to_flash_ids else "None",
+            "potential_points": potential_points,
+            "new_invaders": unflashed_new,
+            "reactivated_invaders": unflashed_reactivated,
+            "new_count": len(unflashed_new),
+            "reactivated_count": len(unflashed_reactivated),
+            # Also include all (including already flashed) for reference
+            "all_new_ids": [inv.id for inv in stats.new_invaders],
+            "all_reactivated_ids": [inv.id for inv in stats.reactivated_invaders],
         }

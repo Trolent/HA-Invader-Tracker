@@ -8,10 +8,12 @@ CONF_UID: Final = "uid"
 CONF_CITIES: Final = "cities"
 CONF_SCRAPE_INTERVAL: Final = "scrape_interval"
 CONF_API_INTERVAL: Final = "api_interval"
+CONF_NEWS_DAYS: Final = "news_days"
 
 # Defaults
 DEFAULT_SCRAPE_INTERVAL_HOURS: Final = 24
 DEFAULT_API_INTERVAL_HOURS: Final = 1
+DEFAULT_NEWS_DAYS: Final = 30
 MIN_SCRAPE_INTERVAL_HOURS: Final = 1
 MAX_SCRAPE_INTERVAL_HOURS: Final = 720  # 30 days
 MIN_API_INTERVAL_HOURS: Final = 1

@@ -17,9 +17,11 @@ from .api.invader_spotter import InvaderSpotterScraper
 from .const import (
     CONF_API_INTERVAL,
     CONF_CITIES,
+    CONF_NEWS_DAYS,
     CONF_SCRAPE_INTERVAL,
     CONF_UID,
     DEFAULT_API_INTERVAL_HOURS,
+    DEFAULT_NEWS_DAYS,
     DEFAULT_SCRAPE_INTERVAL_HOURS,
     DOMAIN,
 )
@@ -47,6 +49,16 @@ API_INTERVAL_OPTIONS = {
     6: "Every 6 hours",
     12: "Every 12 hours",
     24: "Daily",
+}
+
+NEWS_DAYS_OPTIONS = {
+    7: "7 days",
+    14: "14 days",
+    30: "30 days",
+    60: "60 days",
+    90: "90 days",
+    180: "6 months",
+    365: "1 year",
 }
 
 
@@ -297,6 +309,12 @@ class InvaderTrackerOptionsFlow(OptionsFlow):
                                 CONF_API_INTERVAL, DEFAULT_API_INTERVAL_HOURS
                             ),
                         ),
+                        CONF_NEWS_DAYS: user_input.get(
+                            CONF_NEWS_DAYS,
+                            self._get_current_value(
+                                CONF_NEWS_DAYS, DEFAULT_NEWS_DAYS
+                            ),
+                        ),
                     },
                 )
 
@@ -337,6 +355,12 @@ class InvaderTrackerOptionsFlow(OptionsFlow):
                             CONF_API_INTERVAL, DEFAULT_API_INTERVAL_HOURS
                         ),
                     ): vol.In(API_INTERVAL_OPTIONS),
+                    vol.Optional(
+                        CONF_NEWS_DAYS,
+                        default=self._get_current_value(
+                            CONF_NEWS_DAYS, DEFAULT_NEWS_DAYS
+                        ),
+                    ): vol.In(NEWS_DAYS_OPTIONS),
                 }
             ),
             errors=errors,

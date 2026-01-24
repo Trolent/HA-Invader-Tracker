@@ -61,6 +61,46 @@ class City:
     api_city_id: int | None = None  # Numeric ID from Flash Invader API
 
 
+class NewsEventType(Enum):
+    """Type of news event from invader-spotter.art/news.php."""
+
+    ADDED = "added"  # Ajout - New invader added
+    REACTIVATED = "reactivated"  # Réactivation - Was destroyed, now OK
+    RESTORED = "restored"  # Restauration - Restored/repaired
+    DEGRADED = "degraded"  # Dégradation - Status worsened
+    DESTROYED = "destroyed"  # Destruction - Now destroyed
+    STATUS_UPDATE = "status_update"  # Mise à jour du statut
+    ALERT = "alert"  # Alerte
+
+
+@dataclass
+class NewsEvent:
+    """A news event from invader-spotter.art/news.php."""
+
+    event_type: NewsEventType
+    invader_id: str  # e.g., "PA_1554"
+    city_code: str  # e.g., "PA"
+    event_date: date  # Date of the event
+    raw_text: str = ""  # Original text for debugging
+
+    @property
+    def is_positive(self) -> bool:
+        """Is this a positive event (new flashable opportunity)?"""
+        return self.event_type in (
+            NewsEventType.ADDED,
+            NewsEventType.REACTIVATED,
+            NewsEventType.RESTORED,
+        )
+
+    @property
+    def is_negative(self) -> bool:
+        """Is this a negative event (lost opportunity)?"""
+        return self.event_type in (
+            NewsEventType.DESTROYED,
+            NewsEventType.DEGRADED,
+        )
+
+
 @dataclass
 class CityStats:
     """Computed statistics for a tracked city."""
@@ -70,6 +110,7 @@ class CityStats:
     flashed_invaders: list[FlashedInvader] = field(default_factory=list)
     new_invaders: list[Invader] = field(default_factory=list)
     reactivated_invaders: list[Invader] = field(default_factory=list)
+    news_events: list[NewsEvent] = field(default_factory=list)
 
     @property
     def flashed_ids(self) -> set[str]:
@@ -118,6 +159,26 @@ class CityStats:
     def new_count(self) -> int:
         """Number of new + reactivated invaders."""
         return len(self.new_invaders) + len(self.reactivated_invaders)
+
+    @property
+    def unflashed_new(self) -> list[Invader]:
+        """New invaders that have not been flashed yet."""
+        return [inv for inv in self.new_invaders if inv.id not in self.flashed_ids]
+
+    @property
+    def unflashed_reactivated(self) -> list[Invader]:
+        """Reactivated invaders that have not been flashed yet."""
+        return [inv for inv in self.reactivated_invaders if inv.id not in self.flashed_ids]
+
+    @property
+    def unflashed_new_count(self) -> int:
+        """Number of new + reactivated invaders not yet flashed."""
+        return len(self.unflashed_new) + len(self.unflashed_reactivated)
+
+    @property
+    def positive_news_count(self) -> int:
+        """Number of positive news events (added, reactivated, restored)."""
+        return sum(1 for e in self.news_events if e.is_positive)
 
 
 @dataclass
