@@ -133,7 +133,8 @@ class TestStateSnapshot:
         snapshot = StateSnapshot(
             timestamp=datetime.now(),
             invader_ids_by_city={"PA": {"PA_001"}},
-            status_by_invader={"PA_001": InvaderStatus.DESTROYED},
+            status_by_invader={"PA_001": InvaderStatus.OK},  # Current status in snapshot
+            previous_status={"PA_001": InvaderStatus.DESTROYED},  # Was destroyed before
         )
 
         current_invaders = [
@@ -142,7 +143,7 @@ class TestStateSnapshot:
                 city_code="PA",
                 city_name="Paris",
                 points=10,
-                status=InvaderStatus.OK,  # Was DESTROYED, now OK
+                status=InvaderStatus.OK,  # Now OK (reactivated)
             )
         ]
 

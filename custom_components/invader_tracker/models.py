@@ -127,20 +127,44 @@ class StateSnapshot:
     timestamp: datetime
     invader_ids_by_city: dict[str, set[str]] = field(default_factory=dict)
     status_by_invader: dict[str, InvaderStatus] = field(default_factory=dict)
+    # Track when each invader was first seen (for "new" detection)
+    first_seen_date: dict[str, datetime] = field(default_factory=dict)
+    # Track status history for reactivation detection
+    previous_status: dict[str, InvaderStatus] = field(default_factory=dict)
 
     def get_new_invaders(self, city_code: str, current_ids: set[str]) -> set[str]:
         """Return IDs that are in current but not in snapshot."""
         previous = self.invader_ids_by_city.get(city_code, set())
         return current_ids - previous
 
+    def get_recently_added(
+        self, current_invaders: list[Invader], days: int = 30
+    ) -> list[Invader]:
+        """Return invaders first seen within the last N days."""
+        from datetime import timedelta
+        cutoff = datetime.now() - timedelta(days=days)
+        recently_added = []
+        for inv in current_invaders:
+            first_seen = self.first_seen_date.get(inv.id)
+            if first_seen and first_seen >= cutoff:
+                recently_added.append(inv)
+        return recently_added
+
     def get_reactivated(self, current_invaders: list[Invader]) -> list[Invader]:
-        """Return invaders whose status changed from destroyed to OK."""
+        """Return invaders whose status changed from non-flashable to flashable."""
+        non_flashable = {InvaderStatus.DESTROYED, InvaderStatus.NOT_VISIBLE, InvaderStatus.UNKNOWN}
+        flashable = {InvaderStatus.OK, InvaderStatus.DAMAGED, InvaderStatus.VERY_DAMAGED}
         reactivated = []
         for inv in current_invaders:
-            prev_status = self.status_by_invader.get(inv.id)
-            if prev_status == InvaderStatus.DESTROYED and inv.status == InvaderStatus.OK:
+            prev_status = self.previous_status.get(inv.id)
+            if prev_status in non_flashable and inv.status in flashable:
                 reactivated.append(inv)
         return reactivated
+
+    def was_previously_destroyed(self, invader_id: str) -> bool:
+        """Check if invader was previously in a non-flashable state."""
+        non_flashable = {InvaderStatus.DESTROYED, InvaderStatus.NOT_VISIBLE, InvaderStatus.UNKNOWN}
+        return self.previous_status.get(invader_id) in non_flashable
 
 
 @dataclass

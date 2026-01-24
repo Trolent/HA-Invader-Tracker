@@ -80,6 +80,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Save initial snapshot
     await processor.async_save_snapshot()
 
+    # Set up listener to save snapshot after each spotter update
+    async def _on_spotter_update() -> None:
+        """Save snapshot when spotter data updates."""
+        await processor.async_save_snapshot()
+
+    spotter_coordinator.async_add_listener(_on_spotter_update)
+
     # Store runtime data
     hass.data[DOMAIN][entry.entry_id] = {
         "spotter_coordinator": spotter_coordinator,
