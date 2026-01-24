@@ -41,11 +41,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     session = async_get_clientsession(hass)
 
-    # Get configuration
+    # Get configuration - options override data (for editable settings)
     uid = entry.data[CONF_UID]
-    cities = entry.data.get(CONF_CITIES, {})
-    scrape_interval = entry.data.get(CONF_SCRAPE_INTERVAL, DEFAULT_SCRAPE_INTERVAL_HOURS)
-    api_interval = entry.data.get(CONF_API_INTERVAL, DEFAULT_API_INTERVAL_HOURS)
+    # Use options if available, otherwise fall back to data
+    cities = entry.options.get(CONF_CITIES) or entry.data.get(CONF_CITIES, {})
+    scrape_interval = entry.options.get(
+        CONF_SCRAPE_INTERVAL,
+        entry.data.get(CONF_SCRAPE_INTERVAL, DEFAULT_SCRAPE_INTERVAL_HOURS)
+    )
+    api_interval = entry.options.get(
+        CONF_API_INTERVAL,
+        entry.data.get(CONF_API_INTERVAL, DEFAULT_API_INTERVAL_HOURS)
+    )
 
     # Create API clients
     flash_api = FlashInvaderAPI(session, uid)
