@@ -33,7 +33,8 @@ async def async_setup_entry(
 
     spotter_coordinator: InvaderSpotterCoordinator = runtime_data["spotter_coordinator"]
     processor: DataProcessor = runtime_data["processor"]
-    cities: dict[str, str] = entry.data.get(CONF_CITIES, {})
+    # Read from options first (modified config), then data (initial config)
+    cities: dict[str, str] = entry.options.get(CONF_CITIES) or entry.data.get(CONF_CITIES, {})
 
     entities: list[BinarySensorEntity] = []
 
