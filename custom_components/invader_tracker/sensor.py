@@ -16,6 +16,7 @@ from .const import (
     DOMAIN,
     SENSOR_FLASHED,
     SENSOR_NEW,
+    SENSOR_TO_FLASH,
     SENSOR_TOTAL,
     SENSOR_UNFLASHED,
     SENSOR_UNFLASHED_GONE,
@@ -60,6 +61,9 @@ async def async_setup_entry(
                     spotter_coordinator, processor, entry, city_code, city_name
                 ),
                 InvaderNewSensor(
+                    spotter_coordinator, processor, entry, city_code, city_name
+                ),
+                InvaderToFlashSensor(
                     spotter_coordinator, processor, entry, city_code, city_name
                 ),
             ]
@@ -377,4 +381,88 @@ class InvaderNewSensor(InvaderBaseSensor):
             # Also include all (including already flashed) for reference
             "all_new_ids": [inv.id for inv in stats.new_invaders],
             "all_reactivated_ids": [inv.id for inv in stats.reactivated_invaders],
+        }
+
+
+class InvaderToFlashSensor(CoordinatorEntity, SensorEntity):
+    """Text sensor displaying the list of new/reactivated invaders to flash."""
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:format-list-bulleted"
+    _attr_translation_key = "to_flash"
+
+    def __init__(
+        self,
+        coordinator: InvaderSpotterCoordinator,
+        processor: DataProcessor,
+        entry: ConfigEntry,
+        city_code: str,
+        city_name: str,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._processor = processor
+        self._entry = entry
+        self._city_code = city_code
+        self._city_name = city_name
+        self._attr_unique_id = f"{entry.entry_id}_{city_code}_{SENSOR_TO_FLASH}"
+        self._attr_name = "Invaders To Flash"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"{self._entry.entry_id}_{self._city_code}")},
+            name=f"Invader Tracker - {self._city_name}",
+            manufacturer="Space Invader",
+            model="City Tracker",
+            sw_version="1.0",
+        )
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        if not self.coordinator.last_update_success:
+            return False
+        if self.coordinator.data is None:
+            return False
+        return self._city_code in self.coordinator.data
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the list of invaders to flash as text."""
+        if not self.available:
+            return None
+        stats = self._processor.compute_city_stats(self._city_code)
+        
+        # Combine new and reactivated unflashed invaders
+        to_flash_ids = [inv.id for inv in stats.unflashed_new] + \
+                       [inv.id for inv in stats.unflashed_reactivated]
+        
+        if not to_flash_ids:
+            return "Aucun"
+        
+        return ", ".join(to_flash_ids)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes with breakdown."""
+        if not self.available:
+            return {}
+        stats = self._processor.compute_city_stats(self._city_code)
+        
+        new_ids = [inv.id for inv in stats.unflashed_new]
+        reactivated_ids = [inv.id for inv in stats.unflashed_reactivated]
+        
+        # Calculate potential points
+        potential_points = sum(inv.points for inv in stats.unflashed_new) + \
+                          sum(inv.points for inv in stats.unflashed_reactivated)
+        
+        return {
+            "new": ", ".join(new_ids) if new_ids else "Aucun",
+            "reactivated": ", ".join(reactivated_ids) if reactivated_ids else "Aucun",
+            "new_count": len(new_ids),
+            "reactivated_count": len(reactivated_ids),
+            "total_count": len(new_ids) + len(reactivated_ids),
+            "potential_points": potential_points,
         }
