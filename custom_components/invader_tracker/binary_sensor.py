@@ -4,10 +4,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.binary_sensor import (
-    BinarySensorDeviceClass,
-    BinarySensorEntity,
-)
+from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -52,7 +49,7 @@ class InvaderHasNewBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """Binary sensor indicating if there are new invaders."""
 
     _attr_has_entity_name = True
-    _attr_device_class = BinarySensorDeviceClass.UPDATE
+    # No device_class to avoid confusing "à jour"/"Mise à jour" labels
     _attr_icon = "mdi:alert-decagram"
     _attr_translation_key = "has_new"
 

@@ -38,6 +38,7 @@ SENSOR_FLASHED: Final = "flashed"
 SENSOR_UNFLASHED: Final = "unflashed"
 SENSOR_UNFLASHED_GONE: Final = "unflashed_gone"
 SENSOR_NEW: Final = "new"
+SENSOR_TO_FLASH: Final = "to_flash"
 BINARY_SENSOR_HAS_NEW: Final = "has_new"
 
 # Rate limiting

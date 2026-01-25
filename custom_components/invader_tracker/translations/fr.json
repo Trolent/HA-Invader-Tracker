@@ -73,6 +73,9 @@
       },
       "new": {
         "name": "Nouveaux et Réactivés"
+      },
+      "to_flash": {
+        "name": "Invaders à Flasher"
       }
     },
     "binary_sensor": {
