@@ -1,8 +1,9 @@
 # Invader Tracker for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/release/username/ha-invader-tracker.svg)](https://github.com/username/ha-invader-tracker/releases)
-[![License](https://img.shields.io/github/license/username/ha-invader-tracker.svg)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/release/Trolent/HA-Invader-Tracker.svg)](https://github.com/Trolent/HA-Invader-Tracker/releases)
+[![License](https://img.shields.io/github/license/Trolent/HA-Invader-Tracker.svg)](LICENSE)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow.svg?logo=buy-me-a-coffee)](https://buymeacoffee.com/trolent)
 
 Track [Space Invader](https://www.space-invaders.com/) street art mosaics in Home Assistant. This integration combines data from:
 
@@ -140,6 +141,12 @@ logger:
 ## Contributing
 
 Contributions are welcome! Please submit issues and pull requests on GitHub.
+
+## Support
+
+If you find this integration useful, consider buying me a coffee! ☕
+
+[![Buy Me A Coffee](https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png)](https://buymeacoffee.com/trolent)
 
 ## License
 
