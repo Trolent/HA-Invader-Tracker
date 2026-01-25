@@ -362,17 +362,11 @@ class InvaderNewSensor(InvaderBaseSensor):
             for inv in stats.unflashed_reactivated
         ]
         
-        # Create a simple list of IDs for easy reading
-        to_flash_ids = [inv.id for inv in stats.unflashed_new] + \
-                       [inv.id for inv in stats.unflashed_reactivated]
-        
         # Calculate potential points
         potential_points = sum(inv.points for inv in stats.unflashed_new) + \
                           sum(inv.points for inv in stats.unflashed_reactivated)
         
         return {
-            "to_flash": to_flash_ids,  # Simple list of IDs to flash
-            "to_flash_formatted": ", ".join(to_flash_ids) if to_flash_ids else "None",
             "potential_points": potential_points,
             "new_invaders": unflashed_new,
             "reactivated_invaders": unflashed_reactivated,
