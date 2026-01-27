@@ -1,9 +1,10 @@
 """Pytest fixtures for Invader Tracker tests."""
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from custom_components.invader_tracker.const import DOMAIN
@@ -14,6 +15,19 @@ from custom_components.invader_tracker.models import (
 )
 
 from datetime import datetime, date
+
+
+@pytest.fixture
+def config_entry() -> ConfigEntry:
+    """Create a mock config entry."""
+    entry = MagicMock(spec=ConfigEntry)
+    entry.entry_id = "test_entry_id"
+    entry.domain = DOMAIN
+    entry.data = {}
+    entry.options = {}
+    entry.unique_id = "test_unique_id"
+    entry.version = 1
+    return entry
 
 
 @pytest.fixture

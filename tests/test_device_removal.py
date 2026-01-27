@@ -1,12 +1,10 @@
 """Tests for city device removal functionality."""
 from __future__ import annotations
 
-import logging
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceRegistry
 
@@ -15,8 +13,6 @@ from custom_components.invader_tracker.const import (
     CONF_UID,
     DOMAIN,
 )
-
-_LOGGER = logging.getLogger(__name__)
 
 
 @pytest.mark.asyncio
@@ -32,12 +28,12 @@ async def test_city_removal_deletes_device(
         CONF_CITIES: initial_cities,
     }
     
-    # Mock device registry
+    # Mock device registry - Lyon's device (the one being removed)
     device_registry = MagicMock(spec=DeviceRegistry)
-    device_registry.async_get_device = MagicMock(return_value=MagicMock(id="device_id_pa"))
+    device_registry.async_get_device = MagicMock(return_value=MagicMock(id="device_id_lyn"))
     device_registry.async_remove_device = MagicMock()
     
-    with patch("custom_components.invader_tracker.async_get_device_registry") as mock_get_registry:
+    with patch("homeassistant.helpers.device_registry.async_get") as mock_get_registry:
         mock_get_registry.return_value = device_registry
         
         # Setup the entry with mocked coordinators
@@ -74,8 +70,8 @@ async def test_city_removal_deletes_device(
                 identifiers={(DOMAIN, f"{config_entry.entry_id}_LYN")}
             )
             
-            # Verify device was removed
-            device_registry.async_remove_device.assert_called_once_with("device_id_pa")
+            # Verify device was removed (Lyon's device)
+            device_registry.async_remove_device.assert_called_once_with("device_id_lyn")
             
             # Verify coordinators were updated
             runtime_data = hass.data[DOMAIN][config_entry.entry_id]
@@ -100,7 +96,7 @@ async def test_city_removal_no_device_found(
     device_registry.async_get_device = MagicMock(return_value=None)
     device_registry.async_remove_device = MagicMock()
     
-    with patch("custom_components.invader_tracker.async_get_device_registry") as mock_get_registry:
+    with patch("homeassistant.helpers.device_registry.async_get") as mock_get_registry:
         mock_get_registry.return_value = device_registry
         
         # Simulate options update - removing Lyon
@@ -142,7 +138,7 @@ async def test_city_addition_no_device_removal(
     
     device_registry = MagicMock(spec=DeviceRegistry)
     
-    with patch("custom_components.invader_tracker.async_get_device_registry") as mock_get_registry:
+    with patch("homeassistant.helpers.device_registry.async_get") as mock_get_registry:
         mock_get_registry.return_value = device_registry
         
         # Simulate options update - adding Lyon

@@ -1,8 +1,9 @@
 # HA Invader Tracker - Architecture Document
 
-> **Version:** 1.0.0
-> **Last Updated:** 2026-01-23
-> **Status:** Ready for Implementation
+> **Version:** 2.0.0
+> **Last Updated:** 2026-01-27
+> **Status:** Production Ready
+> **Integration Version:** 1.3.3
 
 ---
 
@@ -30,24 +31,26 @@
 This document defines the complete architecture for the **HA Invader Tracker** custom integration for Home Assistant. The integration tracks Space Invader street art mosaics by combining data from two sources:
 
 1. **Flash Invader API** (space-invaders.com) - User's personal flashed invaders via UID
-2. **Invader-Spotter** (invader-spotter.art) - Community database of all known invaders with status
+2. **Invader-Spotter** (invader-spotter.art) - Community database of all known invaders with status updates
 
 The integration exposes **devices per tracked city**, each containing sensors for tracking new, reactivated, and unflashed invaders - enabling Home Assistant automations for street art hunters.
 
 ### Project Type
 
-**HACS Custom Integration** - Python-based, follows Home Assistant Core conventions, distributable via HACS.
+**HACS Custom Integration** - Python-based, follows Home Assistant Core conventions, distributable via HACS, fully typed and tested.
 
-### Key Requirements
+### Key Features
 
-| Requirement | Implementation |
-|-------------|----------------|
-| Daily scraping of invader-spotter | DataUpdateCoordinator with configurable interval |
-| Flash Invader API polling | Separate coordinator, up to hourly |
-| City filtering | Config flow with multi-select from discovered cities |
-| Device per city | HA Device Registry with sensors grouped |
-| Track new/reactivated | Compare against stored state |
-| Track unflashed (flashable vs gone) | Cross-reference both data sources |
+| Feature | Implementation | Status |
+|---------|----------------|--------|
+| Multi-city tracking | Config flow with dynamic city discovery | ✅ Complete |
+| Flash Invader API polling | Dedicated coordinator with auth handling | ✅ Complete |
+| Invader-spotter scraping | Smart caching with fallback mechanisms | ✅ Complete |
+| Change detection | State snapshot comparison | ✅ Complete |
+| New/reactivated tracking | News event parsing + status changes | ✅ Complete |
+| Device per city | HA Device Registry integration | ✅ Complete |
+| News aggregation | Real-time updates from invader-spotter.art | ✅ Complete |
+| Automations | Binary sensors + rich sensor attributes | ✅ Complete |
 
 ---
 
@@ -62,13 +65,13 @@ The HA Invader Tracker is a **polling-based custom integration** built on Home A
 ```mermaid
 graph TB
     subgraph "External Data Sources"
-        IS[invader-spotter.art<br/>HTML Scraping]
-        FI[space-invaders.com<br/>Flash Invader API]
+        IS[invader-spotter.art<br/>HTML Scraping + News]
+        FI[api.space-invaders.com<br/>Flash Invader API]
     end
 
     subgraph "HA Invader Tracker Integration"
         subgraph "Data Layer"
-            ISC[InvaderSpotterCoordinator<br/>Interval: 1d-30d]
+            ISC[InvaderSpotterCoordinator<br/>Interval: 1h-30d]
             FIC[FlashInvaderCoordinator<br/>Interval: 1h-24h]
             STORE[(Local State Store<br/>.storage/invader_tracker)]
         end
@@ -83,9 +86,11 @@ graph TB
             DEV3[Device: ...]
 
             DEV1 --> S1[sensor.total]
-            DEV1 --> S2[sensor.new]
+            DEV1 --> S2[sensor.flashed]
             DEV1 --> S3[sensor.unflashed]
             DEV1 --> S4[sensor.unflashed_gone]
+            DEV1 --> S5[sensor.new]
+            DEV1 --> S6[sensor.to_flash]
             DEV1 --> B1[binary_sensor.has_new]
         end
     end
@@ -97,7 +102,7 @@ graph TB
         ST[State Machine]
     end
 
-    IS -->|Scrape| ISC
+    IS -->|Scrape cities + news| ISC
     FI -->|GET /api/gallery| FIC
     ISC --> STORE
     FIC --> STORE
@@ -153,32 +158,19 @@ graph TB
 
 ### Development & Testing
 
-| Category | Technology | Version | Purpose |
-|----------|------------|---------|---------|
-| **Testing** | pytest | 8.0+ | Unit & integration tests |
-| **Async Testing** | pytest-asyncio | 0.23+ | Async test support |
-| **HA Mocking** | pytest-homeassistant-custom-component | latest | HA-specific fixtures |
-| **HTTP Mocking** | aioresponses | 0.7+ | Mock API responses |
-| **Linting** | ruff | 0.2+ | Code linting |
-| **Type Checking** | mypy | 1.8+ | Static type analysis |
-| **Pre-commit** | pre-commit | 3.6+ | Git hooks |
+| Category | Technology | Purpose |
+|----------|------------|---------|
+| **Testing** | pytest + pytest-asyncio | Unit & async tests |
+| **Linting** | ruff | Code linting & formatting |
+| **Type Checking** | mypy (strict mode) | Static type analysis |
 
-### Dependencies (manifest.json)
+> **Note:** All tool configuration is in `pyproject.toml`. There are no `requirements.txt` or `.pre-commit-config.yaml` files.
+
+### Runtime Dependency (manifest.json)
 
 ```json
 {
-  "domain": "invader_tracker",
-  "name": "Invader Tracker",
-  "version": "1.0.0",
-  "documentation": "https://github.com/username/ha-invader-tracker",
-  "issue_tracker": "https://github.com/username/ha-invader-tracker/issues",
-  "dependencies": [],
-  "codeowners": ["@username"],
-  "requirements": [
-    "beautifulsoup4>=4.12.0"
-  ],
-  "iot_class": "cloud_polling",
-  "config_flow": true
+  "requirements": ["beautifulsoup4>=4.12.0"]
 }
 ```
 
@@ -192,15 +184,30 @@ graph TB
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import Enum
-from typing import Optional, List
 
 
 class InvaderStatus(Enum):
     """Status from invader-spotter community data."""
     OK = "ok"                    # Intact, flashable
-    DAMAGED = "damaged"          # Partially damaged, may be flashable
-    DESTROYED = "destroyed"      # Gone, unflashable
-    UNKNOWN = "unknown"          # No recent report
+    DAMAGED = "damaged"          # Partially damaged, flashable
+    VERY_DAMAGED = "very_damaged"# Heavily damaged, flashable
+    DESTROYED = "destroyed"      # Gone, NOT flashable
+    NOT_VISIBLE = "not_visible"  # Not visible, NOT flashable
+    UNKNOWN = "unknown"          # Unknown, NOT flashable
+
+    # Flashable: OK, DAMAGED, VERY_DAMAGED
+    # Not flashable: DESTROYED, NOT_VISIBLE, UNKNOWN
+
+
+class NewsEventType(Enum):
+    """Type of news event from invader-spotter.art."""
+    ADDED = "added"
+    REACTIVATED = "reactivated"
+    RESTORED = "restored"
+    DEGRADED = "degraded"
+    DESTROYED = "destroyed"
+    STATUS_UPDATE = "status_update"
+    ALERT = "alert"
 
 
 @dataclass
@@ -210,15 +217,15 @@ class Invader:
     city_code: str               # e.g., "PA", "LYN"
     city_name: str               # e.g., "Paris", "Lyon"
     points: int                  # Point value (10-100)
-    install_date: Optional[date] # Date de pose
     status: InvaderStatus        # Current known status
-    status_date: Optional[date]  # When status was last reported
-    status_source: Optional[str] # Who reported (e.g., "spott", "user")
+    install_date: date | None = None
+    status_date: date | None = None
+    status_source: str | None = None
 
     @property
     def is_flashable(self) -> bool:
         """Can this invader still be flashed?"""
-        return self.status in (InvaderStatus.OK, InvaderStatus.DAMAGED)
+        return self.status in (InvaderStatus.OK, InvaderStatus.DAMAGED, InvaderStatus.VERY_DAMAGED)
 
 
 @dataclass
@@ -229,8 +236,26 @@ class FlashedInvader:
     city_id: int                 # Numeric city ID from API
     points: int                  # Points earned
     image_url: str               # URL to invader image
-    install_date: date           # date_pos from API
-    flash_date: datetime         # When user flashed it
+    install_date: date | None = None   # date_pos from API
+    flash_date: datetime | None = None # When user flashed it
+
+
+@dataclass
+class NewsEvent:
+    """A news event from invader-spotter.art."""
+    event_type: NewsEventType
+    invader_id: str              # e.g., "PA_1554"
+    city_code: str               # e.g., "PA"
+    event_date: date
+    raw_text: str = ""
+
+    @property
+    def is_positive(self) -> bool:
+        return self.event_type in (NewsEventType.ADDED, NewsEventType.REACTIVATED, NewsEventType.RESTORED)
+
+    @property
+    def is_negative(self) -> bool:
+        return self.event_type in (NewsEventType.DESTROYED, NewsEventType.DEGRADED)
 
 
 @dataclass
@@ -238,71 +263,84 @@ class City:
     """Represents a city with invaders."""
     code: str                    # e.g., "PA", "LYN"
     name: str                    # e.g., "Paris", "Lyon"
-    country: str                 # e.g., "France"
-    total_invaders: int          # Count from invader-spotter
-    api_city_id: Optional[int] = None  # Numeric ID from Flash Invader API
+    country: str = ""            # e.g., "France"
+    total_invaders: int = 0      # Count from invader-spotter
+    api_city_id: int | None = None  # Numeric ID from Flash Invader API
 
 
 @dataclass
 class CityStats:
     """Computed statistics for a tracked city."""
     city: City
-    all_invaders: List[Invader] = field(default_factory=list)
-    flashed_invaders: List[FlashedInvader] = field(default_factory=list)
+    all_invaders: list[Invader] = field(default_factory=list)
+    flashed_invaders: list[FlashedInvader] = field(default_factory=list)
+    new_invaders: list[Invader] = field(default_factory=list)
+    reactivated_invaders: list[Invader] = field(default_factory=list)
+    news_events: list[NewsEvent] = field(default_factory=list)
 
     @property
     def flashed_ids(self) -> set[str]:
         return {inv.id for inv in self.flashed_invaders}
 
     @property
-    def unflashed(self) -> List[Invader]:
+    def unflashed(self) -> list[Invader]:
         """Invaders not flashed AND still flashable."""
         return [inv for inv in self.all_invaders
                 if inv.id not in self.flashed_ids and inv.is_flashable]
 
     @property
-    def unflashed_gone(self) -> List[Invader]:
+    def unflashed_gone(self) -> list[Invader]:
         """Invaders not flashed AND no longer flashable (missed)."""
         return [inv for inv in self.all_invaders
                 if inv.id not in self.flashed_ids and not inv.is_flashable]
 
     @property
-    def total_count(self) -> int:
-        return len(self.all_invaders)
+    def unflashed_new(self) -> list[Invader]:
+        """New invaders that are unflashed."""
+        return [inv for inv in self.new_invaders if inv.id not in self.flashed_ids]
 
     @property
-    def flashed_count(self) -> int:
-        return len(self.flashed_invaders)
+    def unflashed_reactivated(self) -> list[Invader]:
+        """Reactivated invaders that are unflashed."""
+        return [inv for inv in self.reactivated_invaders if inv.id not in self.flashed_ids]
 
-    @property
-    def unflashed_count(self) -> int:
-        return len(self.unflashed)
-
-    @property
-    def unflashed_gone_count(self) -> int:
-        return len(self.unflashed_gone)
+    # Computed count properties: total_count, flashed_count, unflashed_count,
+    # unflashed_gone_count, new_count, unflashed_new_count, positive_news_count
 
 
 @dataclass
 class StateSnapshot:
-    """Snapshot of state for detecting changes."""
+    """Snapshot of state for detecting changes between updates."""
     timestamp: datetime
-    invader_ids_by_city: dict[str, set[str]]
-    status_by_invader: dict[str, InvaderStatus]
+    invader_ids_by_city: dict[str, set[str]] = field(default_factory=dict)
+    status_by_invader: dict[str, InvaderStatus] = field(default_factory=dict)
+    first_seen_date: dict[str, datetime] = field(default_factory=dict)
+    previous_status: dict[str, InvaderStatus] = field(default_factory=dict)
 
     def get_new_invaders(self, city_code: str, current_ids: set[str]) -> set[str]:
         """Return IDs that are in current but not in snapshot."""
         previous = self.invader_ids_by_city.get(city_code, set())
         return current_ids - previous
 
-    def get_reactivated(self, current_invaders: List[Invader]) -> List[Invader]:
-        """Return invaders whose status changed from destroyed to OK."""
-        reactivated = []
-        for inv in current_invaders:
-            prev_status = self.status_by_invader.get(inv.id)
-            if prev_status == InvaderStatus.DESTROYED and inv.status == InvaderStatus.OK:
-                reactivated.append(inv)
-        return reactivated
+    def get_recently_added(self, current_invaders: list[Invader], days: int = 30) -> list[Invader]:
+        """Return invaders first seen within the given number of days."""
+        ...
+
+    def get_reactivated(self, current_invaders: list[Invader]) -> list[Invader]:
+        """Return invaders whose status changed from destroyed/not_visible to flashable."""
+        ...
+
+    def was_previously_destroyed(self, invader_id: str) -> bool:
+        """Check if an invader was previously in destroyed/not_visible state."""
+        ...
+
+
+@dataclass
+class ChangeSet:
+    """Result of change detection between updates."""
+    new_invaders: list[Invader] = field(default_factory=list)
+    reactivated_invaders: list[Invader] = field(default_factory=list)
+    newly_destroyed: list[Invader] = field(default_factory=list)
 ```
 
 ### Data Relationships
@@ -312,7 +350,9 @@ erDiagram
     City ||--o{ Invader : "has many"
     City ||--o{ FlashedInvader : "has many"
     City ||--|| CityStats : "computed into"
+    City ||--o{ NewsEvent : "has many"
     Invader ||--o| FlashedInvader : "matched by ID"
+    CityStats ||--o{ NewsEvent : "includes"
 
     City {
         string code PK
@@ -336,12 +376,20 @@ erDiagram
         datetime flash_date
     }
 
+    NewsEvent {
+        enum event_type
+        string invader_id FK
+        string city_code FK
+        date event_date
+    }
+
     CityStats {
         string city_code PK
         list all_invaders
         list flashed_invaders
-        int new_count
-        int reactivated_count
+        list new_invaders
+        list reactivated_invaders
+        list news_events
     }
 ```
 
@@ -355,7 +403,7 @@ erDiagram
 
 | Property | Value |
 |----------|-------|
-| **Base URL** | `https://space-invaders.com` |
+| **Base URL** | `https://api.space-invaders.com` |
 | **Documentation** | None (reverse-engineered) |
 | **Authentication** | UID header (UUID format) |
 | **Rate Limits** | Unknown (assume conservative: 24 req/day safe) |
@@ -363,11 +411,9 @@ erDiagram
 #### Endpoint: Get User's Flashed Invaders
 
 ```http
-GET /flashinvaders_v3_pas_trop_predictif/api/gallery HTTP/1.1
-Host: space-invaders.com
+GET /flashinvaders_v3_pas_trop_predictif/api/gallery?uid={user_uid} HTTP/1.1
+Host: api.space-invaders.com
 Accept: */*
-User-Agent: HomeAssistant/InvaderTracker
-uid: {user_uid}
 Origin: https://pnote.eu
 Referer: https://pnote.eu/
 ```
@@ -416,7 +462,8 @@ Referer: https://pnote.eu/
 #### Endpoints
 
 - **Cities List:** `GET /villes.php`
-- **City Invaders:** `GET /ville.php?ville={city_code}`
+- **City Invaders:** `POST /listing.php` (paginated, form data with city code)
+- **News Feed:** `GET /news.php` (recent events: additions, reactivations, destructions)
 
 #### HTML Structure to Parse
 
@@ -433,10 +480,24 @@ Referer: https://pnote.eu/
 
 | French Text | InvaderStatus | Flashable |
 |-------------|---------------|-----------|
-| `OK` | `OK` | Yes |
-| `Dégradé` / `Abîmé` | `DAMAGED` | Yes |
-| `Détruit` / `Disparu` | `DESTROYED` | No |
-| `Inconnu` / missing | `UNKNOWN` | Unknown |
+| `OK` / `intact` | `OK` | Yes |
+| `dégradé` / `un peu dégradé` | `DAMAGED` | Yes |
+| `très dégradé` | `VERY_DAMAGED` | Yes |
+| `détruit` / `détruit !` / `disparu` | `DESTROYED` | No |
+| `non visible` | `NOT_VISIBLE` | No |
+| `inconnu` / missing | `UNKNOWN` | No |
+
+#### News Event Mapping
+
+| French Keyword | NewsEventType |
+|----------------|---------------|
+| `ajout` | `ADDED` |
+| `réactivation` | `REACTIVATED` |
+| `restauration` | `RESTORED` |
+| `dégradation` | `DEGRADED` |
+| `destruction` | `DESTROYED` |
+| `mise à jour` | `STATUS_UPDATE` |
+| `alerte` | `ALERT` |
 
 ---
 
@@ -467,7 +528,6 @@ graph TB
     end
 
     subgraph "Entities"
-        DEV[InvaderTrackerDevice<br/>device.py]
         SENS[InvaderSensor<br/>sensor.py]
         BSENS[InvaderBinarySensor<br/>binary_sensor.py]
     end
@@ -484,9 +544,8 @@ graph TB
     FIC -->|feeds| PROC
     PROC <-->|read/write| STORE
 
-    PROC -->|updates| DEV
-    DEV -->|contains| SENS
-    DEV -->|contains| BSENS
+    PROC -->|updates| SENS
+    PROC -->|updates| BSENS
 ```
 
 ### Component Responsibilities
@@ -494,15 +553,17 @@ graph TB
 | Component | File | Responsibility |
 |-----------|------|----------------|
 | **ConfigFlow** | `config_flow.py` | User setup wizard (UID + city selection) |
-| **OptionsFlow** | `config_flow.py` | Reconfigure cities/intervals |
-| **InvaderSpotterCoordinator** | `coordinator.py` | Periodic scraping of invader-spotter |
-| **FlashInvaderCoordinator** | `coordinator.py` | Periodic Flash Invader API calls |
-| **FlashInvaderAPI** | `api/flash_invader.py` | API client for space-invaders.com |
-| **InvaderSpotterScraper** | `api/invader_spotter.py` | HTML scraper for invader-spotter.art |
-| **DataProcessor** | `processor.py` | Cross-reference data, compute stats, detect changes |
-| **StateStore** | `store.py` | Persist state snapshots to HA storage |
-| **InvaderSensor** | `sensor.py` | Sensor entities (counts with list attributes) |
-| **InvaderBinarySensor** | `binary_sensor.py` | Binary sensor (has_new trigger) |
+| **OptionsFlow** | `config_flow.py` | Reconfigure cities/intervals/news days |
+| **InvaderSpotterCoordinator** | `coordinator.py` | Periodic scraping with per-city caching and news caching (6h TTL) |
+| **FlashInvaderCoordinator** | `coordinator.py` | Periodic Flash Invader API calls with city grouping |
+| **FlashInvaderAPI** | `api/flash_invader.py` | API client for api.space-invaders.com |
+| **InvaderSpotterScraper** | `api/invader_spotter.py` | HTML scraper for invader-spotter.art (cities, invaders with pagination, news) |
+| **DataProcessor** | `processor.py` | Cross-reference data, compute stats, detect changes via news + snapshots |
+| **StateStore** | `store.py` | Persist state snapshots to HA `.storage/` directory |
+| **InvaderSensor** | `sensor.py` | 6 sensor entities per city (total, flashed, unflashed, unflashed_gone, new, to_flash) |
+| **InvaderBinarySensor** | `binary_sensor.py` | Binary sensor per city (has_new trigger) |
+
+> **Note:** Device info is integrated directly into sensor and binary sensor entities via `DeviceInfo` properties. There is no separate `device.py` file.
 
 ---
 
@@ -619,56 +680,53 @@ sequenceDiagram
 ```
 ha-invader-tracker/
 ├── .github/
-│   ├── workflows/
-│   │   ├── ci.yaml                    # Lint, type check, test on PR
-│   │   ├── release.yaml               # Build & publish on tag
-│   │   └── hacs.yaml                  # HACS validation
-│   └── ISSUE_TEMPLATE/
+│   └── workflows/
+│       ├── ci.yml                     # Lint, type-check, test on push/PR
+│       ├── hacs.yml                   # HACS validation on push/PR
+│       └── release.yml                # Build zip & publish on release
 │
 ├── custom_components/
 │   └── invader_tracker/
 │       ├── __init__.py                # Integration setup & lifecycle
-│       ├── manifest.json              # HA + HACS metadata
+│       ├── manifest.json              # HA + HACS metadata (v1.3.3)
 │       ├── const.py                   # Constants, defaults, keys
-│       ├── config_flow.py             # UI configuration wizard
-│       ├── coordinator.py             # DataUpdateCoordinators
-│       ├── processor.py               # Data cross-referencing logic
-│       ├── store.py                   # State persistence
-│       ├── sensor.py                  # Sensor entities
-│       ├── binary_sensor.py           # Binary sensor entities
-│       ├── device.py                  # Device info helper
-│       ├── models.py                  # Data models (dataclasses)
-│       ├── exceptions.py              # Custom exceptions
+│       ├── config_flow.py             # UI configuration wizard (setup + options + reauth)
+│       ├── coordinator.py             # DataUpdateCoordinators (spotter + flash)
+│       ├── processor.py               # Data cross-referencing & change detection
+│       ├── store.py                   # State persistence to HA .storage/
+│       ├── sensor.py                  # 6 sensor entities per city
+│       ├── binary_sensor.py           # 1 binary sensor per city
+│       ├── models.py                  # Data models (dataclasses + enums)
+│       ├── exceptions.py              # Custom exception hierarchy
+│       ├── icon.png                   # Integration icon
 │       ├── api/
-│       │   ├── __init__.py
+│       │   ├── __init__.py            # Exports FlashInvaderAPI, InvaderSpotterScraper
 │       │   ├── flash_invader.py       # Flash Invader API client
-│       │   └── invader_spotter.py     # Invader-Spotter scraper
-│       ├── strings.json               # UI strings (English)
+│       │   └── invader_spotter.py     # Invader-Spotter scraper (cities, invaders, news)
+│       ├── strings.json               # UI strings reference
 │       └── translations/
-│           ├── en.json
-│           └── fr.json
+│           ├── en.json                # English translations
+│           └── fr.json                # French translations
 │
 ├── tests/
-│   ├── conftest.py                    # Pytest fixtures
-│   ├── test_config_flow.py
-│   ├── test_coordinator.py
-│   ├── test_processor.py
-│   ├── test_sensor.py
-│   └── fixtures/
-│       ├── flash_invader_response.json
-│       └── invader_spotter_paris.html
+│   ├── __init__.py
+│   ├── conftest.py                    # Pytest fixtures (config entry, mock data)
+│   ├── test_models.py                 # Data model unit tests
+│   └── test_device_removal.py         # City removal / device registry tests
 │
 ├── docs/
 │   └── architecture.md                # This document
 │
 ├── .gitignore
-├── .pre-commit-config.yaml
-├── hacs.json
-├── LICENSE
+├── hacs.json                          # HACS distribution config
+├── LICENSE                            # MIT
 ├── README.md
-├── requirements.txt
-├── requirements_dev.txt
-└── pyproject.toml
+├── CHANGELOG.md                       # Version history
+├── CONTRIBUTING.md                    # Contributor guidelines
+├── DOCUMENTATION.md                   # Detailed user documentation
+├── INSTALL.md                         # Installation guide
+├── QUICK_REFERENCE.md                 # Quick reference
+└── pyproject.toml                     # Ruff, MyPy, Pytest config
 ```
 
 ---
@@ -679,19 +737,16 @@ ha-invader-tracker/
 
 ```bash
 # Clone repository
-git clone https://github.com/username/ha-invader-tracker.git
-cd ha-invader-tracker
+git clone https://github.com/Trolent/HA-Invader-Tracker.git
+cd HA-Invader-Tracker
 
 # Create virtual environment
 python -m venv venv
 source venv/bin/activate
 
-# Install dependencies
-pip install -r requirements.txt
-pip install -r requirements_dev.txt
-
-# Install pre-commit hooks
-pre-commit install
+# Install dev tools (configured in pyproject.toml)
+pip install ruff mypy pytest pytest-asyncio
+pip install beautifulsoup4>=4.12.0
 ```
 
 ### Development Commands
@@ -735,35 +790,41 @@ docker run -d \
 
 ### GitHub Actions Workflows
 
-#### CI Pipeline (`.github/workflows/ci.yaml`)
+#### CI Pipeline (`.github/workflows/ci.yml`)
 
-- **lint:** Ruff linting and formatting check
-- **type-check:** MyPy static analysis
-- **test:** Pytest with coverage
-- **hacs-validate:** HACS validation action
+Triggered on `push` and `pull_request` to `main`:
 
-#### Release Pipeline (`.github/workflows/release.yaml`)
+| Job | Tools | Purpose |
+|-----|-------|---------|
+| **Lint & Format** | ruff | Check code style and formatting |
+| **Type Check** | mypy | Static type analysis (strict mode) |
+| **Tests** | pytest + pytest-cov | Run test suite with coverage report |
 
-Triggered on version tags (`v*.*.*`):
-1. Verify manifest version matches tag
-2. Create zip archive
-3. Generate changelog from PRs
-4. Create GitHub Release with assets
+#### HACS Validation (`.github/workflows/hacs.yml`)
+
+Triggered on `push` and `pull_request` to `main`:
+- Validates integration structure against HACS requirements using `hacs/action@main`
+
+#### Release Pipeline (`.github/workflows/release.yml`)
+
+Triggered on `release` event (type: `published`):
+1. Checkout code
+2. Create zip: `cd custom_components/invader_tracker && zip -r ../../invader_tracker.zip .`
+3. Upload zip to GitHub release via `softprops/action-gh-release@v2`
 
 ### Release Process
 
 ```bash
-# Update version in manifest.json
+# Update version in manifest.json and hacs.json
 # Commit and push
-git add custom_components/invader_tracker/manifest.json
-git commit -m "Bump version to 1.1.0"
+git add custom_components/invader_tracker/manifest.json hacs.json
+git commit -m "Bump version to X.Y.Z"
 git push origin main
 
-# Create and push tag
-git tag v1.1.0
-git push origin v1.1.0
+# Create a GitHub Release via the UI or CLI
+gh release create vX.Y.Z --title "vX.Y.Z" --notes "Release notes here"
 
-# GitHub Actions automatically creates release
+# GitHub Actions automatically builds and attaches the zip
 ```
 
 ---
@@ -773,7 +834,7 @@ git push origin v1.1.0
 ### Credential Management
 
 - **UID Storage:** Stored in HA's ConfigEntry (encrypted at rest on HA OS)
-- **UID in Transit:** Sent via HTTPS header only
+- **UID in Transit:** Sent via HTTPS query parameter only
 - **UID Logging:** Never logged, never in entity attributes
 
 ### Security Checklist
@@ -801,14 +862,26 @@ class InvaderTrackerError(Exception):
 class AuthenticationError(InvaderTrackerError):
     """UID invalid or expired."""
 
-class ConnectionError(InvaderTrackerError):
+class InvaderTrackerConnectionError(InvaderTrackerError):
     """Network connection failed."""
 
-class ParseError(InvaderTrackerError):
+class FlashInvaderConnectionError(InvaderTrackerConnectionError):
+    """Flash Invader API connection failed."""
+
+class InvaderSpotterConnectionError(InvaderTrackerConnectionError):
+    """Invader Spotter connection failed."""
+
+class DataError(InvaderTrackerError):
+    """Base for data-related errors."""
+
+class ParseError(DataError):
     """Failed to parse response."""
 
+class InvalidResponseError(DataError):
+    """Unexpected response format."""
+
 class RateLimitError(InvaderTrackerError):
-    """Rate limited by external service."""
+    """Rate limited by external service (has retry_after property)."""
 ```
 
 ### Error Recovery Strategies
@@ -825,14 +898,6 @@ class RateLimitError(InvaderTrackerError):
 
 ## 13. Monitoring & Logging
 
-### Diagnostic Sensors
-
-| Entity | Type | Purpose |
-|--------|------|---------|
-| `sensor.invader_tracker_status` | Diagnostic | ok/error with details |
-| `sensor.invader_tracker_last_update` | Diagnostic | Last success timestamp |
-| `sensor.invader_tracker_cities_scraped` | Diagnostic | Count of cities with data |
-
 ### Enable Debug Logging
 
 ```yaml
@@ -843,13 +908,7 @@ logger:
     custom_components.invader_tracker: debug
 ```
 
-### Health Check Service
-
-```yaml
-# Developer Tools > Services
-service: invader_tracker.health_check
-# Returns connectivity status for both APIs
-```
+> **Note:** Dedicated diagnostic sensors and health check services are not yet implemented. Monitoring is currently done via standard HA coordinator availability states and debug logging.
 
 ---
 
@@ -859,40 +918,63 @@ service: invader_tracker.health_check
 
 | Requirement | Status |
 |-------------|--------|
-| Scrape invader-spotter.art daily | ✅ |
+| Scrape invader-spotter.art (configurable interval) | ✅ |
 | Use personal UID for Flash Invader API | ✅ |
 | Track new/reactivated invaders | ✅ |
 | Track unflashed invaders (flashable) | ✅ |
 | Track unflashed invaders (gone) | ✅ |
 | Filter by city in settings | ✅ |
 | Device per city | ✅ |
-| Expose as HA entities | ✅ |
+| Expose as HA entities (6 sensors + 1 binary per city) | ✅ |
+| News event parsing (additions, reactivations, destructions) | ✅ |
+| "Invaders To Flash" text sensor | ✅ |
+| Reauth flow on credential failure | ✅ |
+| Bilingual support (EN/FR) | ✅ |
 | HACS distributable | ✅ |
 
 ### Entity Summary
 
-| Entity Pattern | Type | State | Attributes |
-|----------------|------|-------|------------|
-| `sensor.invader_{city}_total` | Sensor | Count | List of IDs |
-| `sensor.invader_{city}_flashed` | Sensor | Count | IDs + dates |
-| `sensor.invader_{city}_unflashed` | Sensor | Count | IDs + points |
-| `sensor.invader_{city}_unflashed_gone` | Sensor | Count | IDs |
-| `sensor.invader_{city}_new` | Sensor | Count | New + reactivated |
-| `binary_sensor.invader_{city}_has_new` | Binary | ON/OFF | Count |
+| Entity Pattern | Type | Icon | State | Key Attributes |
+|----------------|------|------|-------|----------------|
+| `sensor.{city}_total` | Sensor | `mdi:space-invaders` | Count | `invader_ids`, `flashable_count` |
+| `sensor.{city}_flashed` | Sensor | `mdi:check-circle` | Count | List of `{id, points, flash_date}`, `total_points` |
+| `sensor.{city}_unflashed` | Sensor | `mdi:crosshairs-question` | Count | List of `{id, points, status}`, `total_points` |
+| `sensor.{city}_unflashed_gone` | Sensor | `mdi:ghost-off` | Count | List of `{id, points, status}`, `missed_points` |
+| `sensor.{city}_new` | Sensor | `mdi:new-box` | Count | `new_invaders`, `reactivated_invaders`, `potential_points` |
+| `sensor.{city}_to_flash` | Sensor | `mdi:format-list-bulleted` | CSV list of IDs | `new_ids`, `reactivated_ids`, `potential_points` |
+| `binary_sensor.{city}_has_new` | Binary | `mdi:alert-decagram` | ON/OFF | `new_count`, `reactivated_count`, `total_new` |
 
-### Implementation Estimate
+### Implementation Status
 
-| Phase | Components | Effort |
+| Phase | Components | Status |
 |-------|------------|--------|
-| **Phase 1: Core** | Models, API clients, coordinator | ~2 days |
-| **Phase 2: Integration** | Config flow, entities, device | ~2 days |
-| **Phase 3: Processing** | DataProcessor, StateStore | ~1 day |
-| **Phase 4: Polish** | Diagnostics, translations | ~1 day |
-| **Phase 5: Release** | Tests, CI/CD, docs | ~2 days |
+| **Phase 1: Core** | Models, API clients, coordinators | ✅ Complete |
+| **Phase 2: Integration** | Config flow, entities, device info | ✅ Complete |
+| **Phase 3: Processing** | DataProcessor, StateStore, news events | ✅ Complete |
+| **Phase 4: Polish** | Translations (EN/FR), error handling | ✅ Complete |
+| **Phase 5: Release** | Release workflow, HACS distribution | ✅ Complete |
+| **Phase 6: Testing** | Comprehensive test suite, CI pipeline | Partial (models + device removal tests; CI pipeline added) |
 
 ---
 
-## Appendix: File Templates
+## Appendix: Configuration Reference
+
+### manifest.json
+
+```json
+{
+  "domain": "invader_tracker",
+  "name": "Invader Tracker",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/Trolent/ha-invader-tracker",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/Trolent/ha-invader-tracker/issues",
+  "requirements": ["beautifulsoup4>=4.12.0"],
+  "version": "1.3.3"
+}
+```
 
 ### hacs.json
 
@@ -906,24 +988,27 @@ service: invader_tracker.health_check
 }
 ```
 
-### pyproject.toml
+### pyproject.toml (tool configuration)
 
 ```toml
 [project]
 name = "ha-invader-tracker"
 version = "1.0.0"
 requires-python = ">=3.12"
+license = "MIT"
 
 [tool.ruff]
 target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I", "UP", "B", "C4", "ASYNC"]
+select = ["E", "W", "F", "I", "UP", "B", "C4", "ASYNC", "BLE"]
+ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -932,4 +1017,73 @@ asyncio_mode = "auto"
 
 ---
 
-*Document generated by Winston, BMAD Architect Agent*
+## 15. Recent Improvements (v1.3.x)
+
+### Code Quality (Jan 2026)
+
+- Replaced empty `pass` in `TYPE_CHECKING` blocks with actual type imports
+- Fixed `TimeoutError` -> `asyncio.TimeoutError` in async API clients
+- Removed unused loop variables, fixed variable shadowing
+- Made `install_date` and `flash_date` optional in `FlashedInvader` (prevents crashes on malformed API data)
+- Improved date parsing: returns `None` instead of silent fallback to `datetime.now()`
+- Fixed test mock paths to patch correct import locations
+- Trailing whitespace cleanup across all files
+
+### Caching & Performance
+
+- Per-city data cache with configurable interval (default: 24h)
+- News events cached with 6-hour TTL
+- Fallback to expired cache during API failures
+- Rate limiting: 2s delay between city scrapes, 0.5s between pages
+- Polite retry with exponential backoff
+
+---
+
+## 16. Future Roadmap
+
+### Potential Enhancements
+
+- [ ] Database backend for historical tracking
+- [ ] Statistics dashboard card
+- [ ] Photo gallery of flashed invaders
+- [ ] Location mapping with coordinates
+- [ ] Nearby invaders search radius
+- [ ] Mobile app companion features
+- [ ] Cloud sync capabilities
+- [ ] Achievements/badges system
+
+### API Stability
+
+Both data sources are actively maintained:
+- **invader-spotter.art** - Community-driven, stable
+- **Flash Invader API** - Official app API, stable
+
+The integration is designed to handle minor API changes gracefully through error handling and fallback mechanisms.
+
+---
+
+## 17. Getting Help
+
+### Resources
+
+- **GitHub Issues:** [Trolent/HA-Invader-Tracker/issues](https://github.com/Trolent/HA-Invader-Tracker/issues)
+- **Home Assistant Community:** [Community Forums](https://community.home-assistant.io/)
+- **Debug Logs:** Enable debug logging for detailed troubleshooting
+
+### Development
+
+To contribute or extend the integration:
+
+1. Check existing architecture documentation
+2. Review code style in `pyproject.toml`
+3. Run tests: `pytest tests/`
+4. Submit pull requests with clear descriptions
+
+---
+
+**Document History:**
+- v2.0.0 (Jan 27, 2026) - Aligned with actual codebase: fixed models, components, project structure, API details, exception hierarchy, entity summary. Added NewsEvent, ChangeSet, news mapping.
+- v1.1.0 (Jan 26, 2026) - Added recent improvements, expanded documentation
+- v1.0.0 (Jan 23, 2026) - Initial architecture document
+
+*Document maintained by Winston, BMAD Architect Agent*

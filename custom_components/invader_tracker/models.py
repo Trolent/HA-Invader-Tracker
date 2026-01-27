@@ -46,8 +46,8 @@ class FlashedInvader:
     city_id: int  # Numeric city ID from API
     points: int  # Points earned
     image_url: str  # URL to invader image
-    install_date: date  # date_pos from API
-    flash_date: datetime  # When user flashed it
+    install_date: date | None = None  # date_pos from API (None if parse failed)
+    flash_date: datetime | None = None  # When user flashed it (None if parse failed)
 
 
 @dataclass

@@ -76,11 +76,11 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
         """
         old_cities = set(self._cities.keys())
         new_cities = set(cities.keys())
-        
+
         # Log changes
         added = new_cities - old_cities
         removed = old_cities - new_cities
-        
+
         if added:
             _LOGGER.info("New cities added: %s", ", ".join(added))
         if removed:
@@ -88,25 +88,25 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
             # Clean up cache for removed cities
             for city_code in removed:
                 self._city_cache.pop(city_code, None)
-        
+
         self._cities = cities
 
     def _is_cache_valid(self, city_code: str) -> bool:
         """Check if cached data for a city is still valid.
-        
+
         Args:
             city_code: City code to check
-            
+
         Returns:
             True if cache is valid and not expired
         """
         if city_code not in self._city_cache:
             return False
-        
+
         cached_time, _ = self._city_cache[city_code]
         age = datetime.now() - cached_time
         max_age = timedelta(hours=self._update_interval_hours)
-        
+
         return age < max_age
 
     async def _async_update_data(self) -> dict[str, list[Invader]]:
@@ -118,7 +118,7 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
         cached_count = 0
         scraped_count = 0
 
-        for i, (city_code, city_name) in enumerate(self._cities.items()):
+        for city_code, city_name in self._cities.items():
             # Check if we can use cached data
             if self._is_cache_valid(city_code):
                 _, cached_invaders = self._city_cache[city_code]

@@ -60,7 +60,7 @@ class DataProcessor:
                 "Loaded previous snapshot from %s",
                 self._previous_snapshot.timestamp.isoformat(),
             )
-        
+
         # Fetch initial news events
         await self.async_refresh_news()
 
@@ -105,7 +105,7 @@ class DataProcessor:
             all_invaders, city_news, NewsEventType.ADDED
         )
         reactivated_invaders = self._get_invaders_from_news(
-            all_invaders, city_news, 
+            all_invaders, city_news,
             NewsEventType.REACTIVATED, NewsEventType.RESTORED
         )
 
@@ -229,28 +229,28 @@ class DataProcessor:
         first_seen = {}
         if self._previous_snapshot:
             first_seen = dict(self._previous_snapshot.first_seen_date)
-        
+
         # Add first_seen for newly discovered invaders
         for invaders in self._spotter.data.values():
             for inv in invaders:
                 if inv.id not in first_seen:
                     first_seen[inv.id] = now
                     _LOGGER.debug("New invader discovered: %s", inv.id)
-        
+
         # Track previous status (current status becomes previous for next comparison)
         # Only update if status changed (to preserve history)
         previous_status = {}
         if self._previous_snapshot:
             previous_status = dict(self._previous_snapshot.previous_status)
-        
+
         for inv_id, status in current_status.items():
-            old_status = self._previous_snapshot.status_by_invader.get(inv_id) if self._previous_snapshot else None
-            if old_status and old_status != status:
+            previous_inv_status = self._previous_snapshot.status_by_invader.get(inv_id) if self._previous_snapshot else None
+            if previous_inv_status and previous_inv_status != status:
                 # Status changed - record the old status for reactivation detection
-                previous_status[inv_id] = old_status
+                previous_status[inv_id] = previous_inv_status
                 _LOGGER.info(
                     "Status change detected: %s went from %s to %s",
-                    inv_id, old_status.value, status.value
+                    inv_id, previous_inv_status.value, status.value
                 )
 
         snapshot = StateSnapshot(

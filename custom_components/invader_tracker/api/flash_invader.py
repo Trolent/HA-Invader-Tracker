@@ -1,9 +1,9 @@
 """Flash Invader API client."""
 from __future__ import annotations
 
+import asyncio
 import logging
-from datetime import datetime
-from typing import TYPE_CHECKING
+from datetime import date, datetime
 
 import aiohttp
 
@@ -16,9 +16,6 @@ from ..exceptions import (
     RateLimitError,
 )
 from ..models import FlashedInvader
-
-if TYPE_CHECKING:
-    pass
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -70,7 +67,7 @@ class FlashInvaderAPI:
             ) as response:
                 return await self._handle_response(response)
 
-        except TimeoutError as err:
+        except asyncio.TimeoutError as err:
             _LOGGER.warning("Flash Invader API timeout")
             raise FlashInvaderConnectionError("Request timed out") from err
 
@@ -141,19 +138,23 @@ class FlashInvaderAPI:
 
     def _parse_invader(self, inv_id: str, data: dict) -> FlashedInvader:
         """Parse a single invader from API response."""
-        # Parse install date
+        # Parse install date (None if invalid)
+        install_date: date | None = None
         install_date_str = data.get("date_pos", "")
-        try:
-            install_date = datetime.strptime(install_date_str, "%Y-%m-%d").date()
-        except ValueError:
-            install_date = datetime.now().date()
+        if install_date_str:
+            try:
+                install_date = datetime.strptime(install_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                _LOGGER.debug("Could not parse install_date for %s: %s", inv_id, install_date_str)
 
-        # Parse flash date
+        # Parse flash date (None if invalid)
+        flash_date: datetime | None = None
         flash_date_str = data.get("date_flash", "")
-        try:
-            flash_date = datetime.strptime(flash_date_str, "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            flash_date = datetime.now()
+        if flash_date_str:
+            try:
+                flash_date = datetime.strptime(flash_date_str, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                _LOGGER.debug("Could not parse flash_date for %s: %s", inv_id, flash_date_str)
 
         return FlashedInvader(
             id=inv_id,

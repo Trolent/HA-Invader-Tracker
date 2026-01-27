@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -25,9 +24,6 @@ from .const import (
 from .coordinator import FlashInvaderCoordinator, InvaderSpotterCoordinator
 from .processor import DataProcessor
 from .store import StateStore
-
-if TYPE_CHECKING:
-    pass
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -137,23 +133,23 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle options update."""
     _LOGGER.info("Options updated, reloading Invader Tracker")
-    
+
     # Get old and new cities to detect removals
     old_cities = entry.data.get(CONF_CITIES, {})
     new_cities = entry.options.get(CONF_CITIES, {})
-    
+
     # Find removed cities
     removed_cities = set(old_cities.keys()) - set(new_cities.keys())
-    
+
     # Unload the integration first to remove old entities
     await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    
+
     # Remove devices for deleted cities
     if removed_cities:
         from homeassistant.helpers.device_registry import async_get as async_get_device_registry
-        
+
         device_registry = async_get_device_registry(hass)
-        
+
         for city_code in removed_cities:
             device_id = f"{entry.entry_id}_{city_code}"
             # Find device by identifier
@@ -163,15 +159,15 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
             if device:
                 device_registry.async_remove_device(device.id)
                 _LOGGER.debug("Removed device for city: %s", city_code)
-    
+
     # Update coordinators with new cities
     runtime_data = hass.data[DOMAIN][entry.entry_id]
     spotter_coordinator: InvaderSpotterCoordinator = runtime_data["spotter_coordinator"]
     processor: DataProcessor = runtime_data["processor"]
-    
+
     spotter_coordinator.update_cities(new_cities)
     processor.set_city_names(new_cities)
-    
+
     # Reload the integration to set up new entities
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
