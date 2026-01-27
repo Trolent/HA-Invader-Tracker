@@ -5,8 +5,7 @@ import asyncio
 import html
 import logging
 import re
-from datetime import datetime
-from typing import TYPE_CHECKING
+from datetime import date, datetime
 
 import aiohttp
 from bs4 import BeautifulSoup
@@ -14,9 +13,6 @@ from bs4 import BeautifulSoup
 from ..const import INVADER_SPOTTER_BASE_URL
 from ..exceptions import InvaderSpotterConnectionError, ParseError
 from ..models import City, Invader, InvaderStatus, NewsEvent, NewsEventType
-
-if TYPE_CHECKING:
-    pass
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -112,7 +108,7 @@ class InvaderSpotterScraper:
                 html_content = await response.text()
                 return self._parse_cities_page(html_content)
 
-        except TimeoutError as err:
+        except asyncio.TimeoutError as err:
             _LOGGER.warning("Invader Spotter timeout fetching cities")
             raise InvaderSpotterConnectionError("Timeout fetching cities") from err
 
@@ -129,17 +125,17 @@ class InvaderSpotterScraper:
         # Look for city links - they use javascript:envoi("CODE") format
         for link in soup.find_all("a", href=True):
             href = link.get("href", "")
-            
+
             # Match javascript:envoi("CODE") pattern
             match = re.search(r"javascript:envoi\(['\"]([A-Z0-9_]+)['\"]\)", href, re.IGNORECASE)
             if match:
                 city_code = match.group(1).upper()
-                
+
                 # Skip if already seen (avoid duplicates from map and list)
                 if city_code in seen_codes:
                     continue
                 seen_codes.add(city_code)
-                
+
                 city_name = link.get_text(strip=True) or city_code
 
                 # Clean up city name
@@ -171,24 +167,24 @@ class InvaderSpotterScraper:
 
         """
         _LOGGER.debug("Fetching invaders for city %s", city_code)
-        
+
         all_invaders: list[Invader] = []
         page = 1
         max_pages = 100  # Safety limit
-        
+
         while page <= max_pages:
             invaders, has_more = await self._fetch_city_page(
                 city_code, city_name, page
             )
             all_invaders.extend(invaders)
-            
+
             if not has_more or not invaders:
                 break
-            
+
             page += 1
             # Small delay between pages to be respectful
             await asyncio.sleep(0.5)
-        
+
         _LOGGER.debug(
             "Fetched total %d invaders for %s across %d pages",
             len(all_invaders), city_code, page
@@ -199,12 +195,12 @@ class InvaderSpotterScraper:
         self, city_code: str, city_name: str, page: int
     ) -> tuple[list[Invader], bool]:
         """Fetch a single page of invaders for a city.
-        
+
         Returns:
             Tuple of (invaders list, has_more_pages)
         """
         url = f"{INVADER_SPOTTER_BASE_URL}/listing.php"
-        
+
         # The site requires POST with specific form data
         data = {
             "ville": city_code,
@@ -237,7 +233,7 @@ class InvaderSpotterScraper:
                 
                 return invaders, has_more
 
-        except TimeoutError as err:
+        except asyncio.TimeoutError as err:
             _LOGGER.warning("Invader Spotter timeout for city %s page %d", city_code, page)
             raise InvaderSpotterConnectionError(f"Timeout for {city_code}") from err
 
@@ -435,7 +431,7 @@ class InvaderSpotterScraper:
 
         return InvaderStatus.UNKNOWN
 
-    def _extract_date(self, text: str) -> datetime | None:
+    def _extract_date(self, text: str) -> date | None:
         """Extract date from text (French format DD/MM/YYYY)."""
         match = DATE_PATTERN_FR.search(text)
         if match:
@@ -555,7 +551,7 @@ class InvaderSpotterScraper:
     def _parse_news_line(
         self,
         line: str,
-        event_date: datetime,
+        event_date: date,
         city_codes: set[str] | None,
     ) -> list[NewsEvent]:
         """Parse a single news line for events.

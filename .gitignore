@@ -1,8 +1,7 @@
-#Claude
-.bmad-core
-.claude
-web-bundles
-.gitingnire
+# Claude / BMAD
+.bmad-core/
+.claude/
+web-bundles/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

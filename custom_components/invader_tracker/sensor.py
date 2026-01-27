@@ -207,7 +207,7 @@ class InvaderFlashedSensor(InvaderBaseSensor):
                 {
                     "id": inv.id,
                     "points": inv.points,
-                    "flash_date": inv.flash_date.isoformat(),
+                    "flash_date": inv.flash_date.isoformat() if inv.flash_date else None,
                 }
                 for inv in stats.flashed_invaders
             ],
