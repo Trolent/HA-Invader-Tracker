@@ -22,6 +22,8 @@ Invader Tracker is a comprehensive Home Assistant integration that helps you tra
 - **Collection management** - Track which invaders you've flashed vs remaining targets
 - **Smart notifications** - Get alerted to new invaders and reactivated targets
 - **Missed opportunities** - Keep tabs on destroyed invaders you couldn't reach
+- **Player profile device** - Your score, rank, cities found, and invaders found in one place
+- **Followed players** - Track the players you follow directly in Home Assistant
 - **Automation-ready** - Binary sensors and attributes for custom automations
 - **Smart caching** - Efficient data fetching to minimize API calls
 - **Status tracking** - Monitor invader condition (OK, damaged, destroyed, etc.)
@@ -32,7 +34,7 @@ Invader Tracker is a comprehensive Home Assistant integration that helps you tra
 - Invader first-seen date tracking
 - Per-city device grouping for better organization
 - Configurable update intervals for both scraping and API polling
-- Fallback mechanisms for network resilience
+- Fallback mechanisms and automatic retry on network errors
 
 ## Installation
 
@@ -81,41 +83,33 @@ Your UID is a unique identifier (UUID v4 format) for your Flash Invader account.
 
 ## Entities & Sensors
 
+### Player Profile Device
+
+Created automatically as soon as a UID is configured. Contains:
+
+| Entity | Type | Description | Attributes |
+|--------|------|-------------|------------|
+| `sensor.score` | Sensor | Your total score | `rank`, `rank_str` |
+| `sensor.rank` | Sensor | Your global rank | — |
+| `sensor.invaders_found` | Sensor | Total invaders flashed (all cities) | — |
+| `sensor.cities_found` | Sensor | Number of cities with at least one flash | — |
+| `sensor.{player_name}` | Sensor | Score of a followed player | `rank`, `rank_str`, `invaders_count` |
+
+One `sensor.{player_name}` entity is created per followed player.
+
+### City Devices
+
 For each tracked city, the integration creates a **device** with the following entities:
 
-### Sensor Entities
-
-| Entity ID | Type | Unit | Description |
-|-----------|------|------|-------------|
-| `sensor.invader_{city}_total` | Sensor | count | Total invaders in the city |
-| `sensor.invader_{city}_flashed` | Sensor | count | Invaders you've successfully flashed |
-| `sensor.invader_{city}_unflashed` | Sensor | count | Available invaders not yet flashed |
-| `sensor.invader_{city}_unflashed_gone` | Sensor | count | Destroyed invaders you missed |
-| `sensor.invader_{city}_new` | Sensor | count | New or reactivated invaders |
-| `sensor.invader_{city}_to_flash` | Sensor | text | Invader IDs to flash (comma-separated list) |
-
-### Binary Sensor Entities
-
-| Entity ID | Type | Description |
-|-----------|------|-------------|
-| `binary_sensor.invader_{city}_has_new` | Binary Sensor | ON when new invaders are detected |
-
-### Sensor Attributes
-
-Each sensor includes detailed attributes:
-- `invader_ids`: List of relevant invader IDs
-- `flashable_count`: Number of flashable invaders
-- Status breakdowns by invader condition
-
-**Example:** `sensor.invader_paris_unflashed` attributes:
-```
-state: 42
-invader_ids:
-  - PA_001
-  - PA_002
-  - PA_125
-flashable_count: 42
-```
+| Entity | Type | Description | Attributes |
+|--------|------|-------------|------------|
+| `sensor.total_invaders` | Sensor | Total invaders in the city | `flashable_count` |
+| `sensor.flashed` | Sensor | Invaders you've flashed | — |
+| `sensor.unflashed_available` | Sensor | Flashable invaders not yet done | — |
+| `sensor.unflashed_gone` | Sensor | Destroyed invaders you missed | — |
+| `sensor.new_reactivated` | Sensor | New + reactivated invaders (total) | `new_count`, `reactivated_count` |
+| `sensor.invaders_to_flash` | Sensor | CSV list of IDs to flash | — |
+| `binary_sensor.has_new` | Binary Sensor | ON when new invaders exist | — |
 
 ## Configuration Options
 
@@ -293,19 +287,20 @@ Please include:
 ```
 ├── custom_components/
 │   └── invader_tracker/
-│       ├── api/                 # External API clients
-│       │   ├── flash_invader.py # Flash Invader API
-│       │   └── invader_spotter.py # Scraper for invader-spotter.art
-│       ├── coordinator.py       # Data update coordinators
-│       ├── processor.py         # Data processing & analysis
-│       ├── models.py            # Data models & enums
-│       ├── sensor.py            # Sensor entities
-│       ├── binary_sensor.py     # Binary sensor entities
-│       ├── config_flow.py       # Configuration UI
-│       ├── exceptions.py        # Custom exceptions
-│       └── const.py             # Constants
-├── tests/                       # Unit tests
-└── docs/                        # Documentation
+│       ├── api/                    # External API clients
+│       │   ├── flash_invader.py    # Flash Invader API (gallery, account, highscore)
+│       │   └── invader_spotter.py  # Scraper for invader-spotter.art
+│       ├── coordinator.py          # Data update coordinators
+│       ├── processor.py            # Data processing & analysis
+│       ├── models.py               # Data models & enums
+│       ├── sensor.py               # City sensor entities
+│       ├── sensor_profile.py       # Player profile & followed players sensors
+│       ├── binary_sensor.py        # Binary sensor entities
+│       ├── config_flow.py          # Configuration UI
+│       ├── exceptions.py           # Custom exceptions
+│       └── const.py                # Constants
+├── tests/                          # Unit tests
+└── docs/                           # Documentation
 ```
 
 ## Support & Credits
