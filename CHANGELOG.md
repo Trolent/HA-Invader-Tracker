@@ -5,6 +5,30 @@ All notable changes to the Invader Tracker integration will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-04-12
+
+### Added
+
+- **Player Profile device** — nouveau device "Invader Tracker - Profil" créé automatiquement dès qu'un UID est configuré :
+  - `sensor.score` — score total (attributs : `rank`, `rank_str`)
+  - `sensor.rank` — classement global
+  - `sensor.invaders_found` — total d'invaders flashés toutes villes confondues
+  - `sensor.cities_found` — nombre de villes distinctes avec au moins un flash
+- **Joueurs suivis** — une entité par joueur suivi (valeur = score, attributs = `rank`, `rank_str`, `invaders_count`)
+- **Retry sur timeout scraper** — les timeouts sur invader-spotter.art déclenchent jusqu'à 3 tentatives avec backoff exponentiel (2s, 4s), réduisant les mises à jour partielles
+- Nouveaux endpoints API : `get_player_profile()` et `get_followed_players()` dans `FlashInvaderAPI`
+- Nouveau coordinator : `FlashInvaderProfileCoordinator`
+- Nouveaux modèles : `PlayerProfile`, `FollowedPlayer`
+
+### Changed
+
+- Attributs des entités ville simplifiés — suppression des listes verboses, seuls les compteurs essentiels sont conservés :
+  - `Total Invaders` : supprimé `invader_ids`, conservé `flashable_count`
+  - `Flashed`, `Unflashed (Available)`, `Unflashed (Gone)` : aucun attribut
+  - `New & Reactivated` : valeur = total (new + reactivated), attributs = `new_count` + `reactivated_count`
+  - `Invaders To Flash` : valeur = liste CSV des IDs, aucun attribut
+  - `Has New Invaders` : binaire pur, aucun attribut
+
 ## [2.0.0] - 2026-01-27
 
 ### Added

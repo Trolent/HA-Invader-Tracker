@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -35,12 +35,17 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Invader Tracker sensors from config entry."""
+    from .sensor_profile import async_setup_profile_entities
+
     runtime_data = hass.data[DOMAIN][entry.entry_id]
 
     spotter_coordinator: InvaderSpotterCoordinator = runtime_data["spotter_coordinator"]
     processor: DataProcessor = runtime_data["processor"]
     # Read from options first (modified config), then data (initial config)
     cities: dict[str, str] = entry.options.get(CONF_CITIES) or entry.data.get(CONF_CITIES, {})
+
+    # Set up profile entities (always, since UID is required)
+    await async_setup_profile_entities(hass, entry, async_add_entities)
 
     entities: list[SensorEntity] = []
 
@@ -163,7 +168,6 @@ class InvaderTotalSensor(InvaderBaseSensor):
             return {}
         stats = self._processor.compute_city_stats(self._city_code)
         return {
-            "invader_ids": [inv.id for inv in stats.all_invaders],
             "flashable_count": sum(1 for inv in stats.all_invaders if inv.is_flashable),
         }
 
@@ -196,24 +200,6 @@ class InvaderFlashedSensor(InvaderBaseSensor):
         stats = self._processor.compute_city_stats(self._city_code)
         return stats.flashed_count
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes."""
-        if not self.available:
-            return {}
-        stats = self._processor.compute_city_stats(self._city_code)
-        return {
-            "invaders": [
-                {
-                    "id": inv.id,
-                    "points": inv.points,
-                    "flash_date": inv.flash_date.isoformat() if inv.flash_date else None,
-                }
-                for inv in stats.flashed_invaders
-            ],
-            "total_points": sum(inv.points for inv in stats.flashed_invaders),
-        }
-
 
 class InvaderUnflashedSensor(InvaderBaseSensor):
     """Sensor for unflashed but available invaders."""
@@ -243,23 +229,6 @@ class InvaderUnflashedSensor(InvaderBaseSensor):
         stats = self._processor.compute_city_stats(self._city_code)
         return stats.unflashed_count
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes."""
-        if not self.available:
-            return {}
-        stats = self._processor.compute_city_stats(self._city_code)
-        return {
-            "invaders": [
-                {
-                    "id": inv.id,
-                    "points": inv.points,
-                    "status": inv.status.value,
-                }
-                for inv in stats.unflashed
-            ],
-            "total_points": sum(inv.points for inv in stats.unflashed),
-        }
 
 
 class InvaderUnflashedGoneSensor(InvaderBaseSensor):
@@ -290,23 +259,6 @@ class InvaderUnflashedGoneSensor(InvaderBaseSensor):
         stats = self._processor.compute_city_stats(self._city_code)
         return stats.unflashed_gone_count
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes."""
-        if not self.available:
-            return {}
-        stats = self._processor.compute_city_stats(self._city_code)
-        return {
-            "invaders": [
-                {
-                    "id": inv.id,
-                    "points": inv.points,
-                    "status": inv.status.value,
-                }
-                for inv in stats.unflashed_gone
-            ],
-            "missed_points": sum(inv.points for inv in stats.unflashed_gone),
-        }
 
 
 class InvaderNewSensor(InvaderBaseSensor):
@@ -331,50 +283,21 @@ class InvaderNewSensor(InvaderBaseSensor):
 
     @property
     def native_value(self) -> int | None:
-        """Return the count of unflashed new/reactivated invaders."""
+        """Return the total count of new and reactivated invaders."""
         if not self.available:
             return None
         stats = self._processor.compute_city_stats(self._city_code)
-        return stats.unflashed_new_count
+        return stats.new_count
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes with detailed invader lists."""
+        """Return extra state attributes."""
         if not self.available:
             return {}
         stats = self._processor.compute_city_stats(self._city_code)
-        
-        # Format invader lists with details
-        unflashed_new = [
-            {
-                "id": inv.id,
-                "points": inv.points,
-                "status": inv.status.value,
-            }
-            for inv in stats.unflashed_new
-        ]
-        unflashed_reactivated = [
-            {
-                "id": inv.id,
-                "points": inv.points,
-                "status": inv.status.value,
-            }
-            for inv in stats.unflashed_reactivated
-        ]
-        
-        # Calculate potential points
-        potential_points = sum(inv.points for inv in stats.unflashed_new) + \
-                          sum(inv.points for inv in stats.unflashed_reactivated)
-        
         return {
-            "potential_points": potential_points,
-            "new_invaders": unflashed_new,
-            "reactivated_invaders": unflashed_reactivated,
-            "new_count": len(unflashed_new),
-            "reactivated_count": len(unflashed_reactivated),
-            # Also include all (including already flashed) for reference
-            "all_new_ids": [inv.id for inv in stats.new_invaders],
-            "all_reactivated_ids": [inv.id for inv in stats.reactivated_invaders],
+            "new_count": len(stats.new_invaders),
+            "reactivated_count": len(stats.reactivated_invaders),
         }
 
 
@@ -438,25 +361,3 @@ class InvaderToFlashSensor(CoordinatorEntity, SensorEntity):
         
         return ", ".join(to_flash_ids)
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes with breakdown."""
-        if not self.available:
-            return {}
-        stats = self._processor.compute_city_stats(self._city_code)
-        
-        new_ids = [inv.id for inv in stats.unflashed_new]
-        reactivated_ids = [inv.id for inv in stats.unflashed_reactivated]
-        
-        # Calculate potential points
-        potential_points = sum(inv.points for inv in stats.unflashed_new) + \
-                          sum(inv.points for inv in stats.unflashed_reactivated)
-        
-        return {
-            "new": ", ".join(new_ids) if new_ids else "Aucun",
-            "reactivated": ", ".join(reactivated_ids) if reactivated_ids else "Aucun",
-            "new_count": len(new_ids),
-            "reactivated_count": len(reactivated_ids),
-            "total_count": len(new_ids) + len(reactivated_ids),
-            "potential_points": potential_points,
-        }
