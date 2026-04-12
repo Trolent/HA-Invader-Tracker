@@ -22,6 +22,8 @@ MAX_API_INTERVAL_HOURS: Final = 24
 # API URLs
 FLASH_INVADER_BASE_URL: Final = "https://api.space-invaders.com"
 FLASH_INVADER_ENDPOINT: Final = "/flashinvaders_v3_pas_trop_predictif/api/gallery"
+FLASH_INVADER_ACCOUNT_ENDPOINT: Final = "/flashinvaders_v3_pas_trop_predictif/api/account"
+FLASH_INVADER_HIGHSCORE_ENDPOINT: Final = "/flashinvaders_v3_pas_trop_predictif/app_web/account/highscore"
 INVADER_SPOTTER_BASE_URL: Final = "https://www.invader-spotter.art"
 
 # Storage
@@ -31,6 +33,7 @@ STORAGE_KEY: Final = f"{DOMAIN}_state"
 # Coordinator names
 COORDINATOR_SPOTTER: Final = "invader_spotter"
 COORDINATOR_FLASH: Final = "flash_invader"
+COORDINATOR_PROFILE: Final = "flash_invader_profile"
 
 # Entity naming
 SENSOR_TOTAL: Final = "total"
@@ -43,3 +46,7 @@ BINARY_SENSOR_HAS_NEW: Final = "has_new"
 
 # Rate limiting
 CITY_REQUEST_DELAY: Final = 2.0  # seconds between city requests
+
+# Retry settings
+SCRAPE_MAX_RETRIES: Final = 3
+SCRAPE_RETRY_BACKOFF: Final = 2.0  # seconds, doubled on each retry

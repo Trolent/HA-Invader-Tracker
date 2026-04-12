@@ -1,9 +1,9 @@
 # HA Invader Tracker - Architecture Document
 
-> **Version:** 2.0.0
-> **Last Updated:** 2026-01-27
+> **Version:** 2.1.0
+> **Last Updated:** 2026-04-12
 > **Status:** Production Ready
-> **Integration Version:** 1.3.3
+> **Integration Version:** 2.1.0
 
 ---
 
@@ -33,7 +33,7 @@ This document defines the complete architecture for the **HA Invader Tracker** c
 1. **Flash Invader API** (space-invaders.com) - User's personal flashed invaders via UID
 2. **Invader-Spotter** (invader-spotter.art) - Community database of all known invaders with status updates
 
-The integration exposes **devices per tracked city**, each containing sensors for tracking new, reactivated, and unflashed invaders - enabling Home Assistant automations for street art hunters.
+The integration exposes **devices per tracked city** (sensors for new, reactivated, and unflashed invaders) and a **player profile device** (personal score, rank, and followed players) — enabling Home Assistant automations and dashboards for street art hunters.
 
 ### Project Type
 
@@ -45,12 +45,14 @@ The integration exposes **devices per tracked city**, each containing sensors fo
 |---------|----------------|--------|
 | Multi-city tracking | Config flow with dynamic city discovery | ✅ Complete |
 | Flash Invader API polling | Dedicated coordinator with auth handling | ✅ Complete |
-| Invader-spotter scraping | Smart caching with fallback mechanisms | ✅ Complete |
+| Invader-spotter scraping | Smart caching with fallback + retries | ✅ Complete |
 | Change detection | State snapshot comparison | ✅ Complete |
 | New/reactivated tracking | News event parsing + status changes | ✅ Complete |
 | Device per city | HA Device Registry integration | ✅ Complete |
 | News aggregation | Real-time updates from invader-spotter.art | ✅ Complete |
-| Automations | Binary sensors + rich sensor attributes | ✅ Complete |
+| Player profile device | Score, rank, cities found, invaders found | ✅ Complete |
+| Followed players | One sensor per followed player | ✅ Complete |
+| Scrape retry logic | Exponential backoff on timeout | ✅ Complete |
 
 ---
 
@@ -73,6 +75,7 @@ graph TB
         subgraph "Data Layer"
             ISC[InvaderSpotterCoordinator<br/>Interval: 1h-30d]
             FIC[FlashInvaderCoordinator<br/>Interval: 1h-24h]
+            FIPC[FlashInvaderProfileCoordinator<br/>Interval: 1h-24h]
             STORE[(Local State Store<br/>.storage/invader_tracker)]
         end
 
@@ -83,7 +86,7 @@ graph TB
         subgraph "Entity Layer"
             DEV1[Device: Paris]
             DEV2[Device: Lyon]
-            DEV3[Device: ...]
+            DEVP[Device: Profil]
 
             DEV1 --> S1[sensor.total]
             DEV1 --> S2[sensor.flashed]
@@ -92,6 +95,12 @@ graph TB
             DEV1 --> S5[sensor.new]
             DEV1 --> S6[sensor.to_flash]
             DEV1 --> B1[binary_sensor.has_new]
+
+            DEVP --> P1[sensor.score]
+            DEVP --> P2[sensor.rank]
+            DEVP --> P3[sensor.invaders_found]
+            DEVP --> P4[sensor.cities_found]
+            DEVP --> P5[sensor.followed_player_x]
         end
     end
 
@@ -104,13 +113,15 @@ graph TB
 
     IS -->|Scrape cities + news| ISC
     FI -->|GET /api/gallery| FIC
+    FI -->|GET /api/account + highscore| FIPC
     ISC --> STORE
     FIC --> STORE
     STORE --> PROC
     PROC --> DEV1
     PROC --> DEV2
-    PROC --> DEV3
+    FIPC --> DEVP
     DEV1 --> DR
+    DEVP --> DR
     S1 --> ER
     S1 --> ST
 ```

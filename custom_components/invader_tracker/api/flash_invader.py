@@ -7,7 +7,12 @@ from datetime import date, datetime
 
 import aiohttp
 
-from ..const import FLASH_INVADER_BASE_URL, FLASH_INVADER_ENDPOINT
+from ..const import (
+    FLASH_INVADER_ACCOUNT_ENDPOINT,
+    FLASH_INVADER_BASE_URL,
+    FLASH_INVADER_ENDPOINT,
+    FLASH_INVADER_HIGHSCORE_ENDPOINT,
+)
 from ..exceptions import (
     AuthenticationError,
     FlashInvaderConnectionError,
@@ -15,7 +20,7 @@ from ..exceptions import (
     ParseError,
     RateLimitError,
 )
-from ..models import FlashedInvader
+from ..models import FlashedInvader, FollowedPlayer, PlayerProfile
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -135,6 +140,119 @@ class FlashInvaderAPI:
 
         _LOGGER.debug("Parsed %d flashed invaders", len(invaders))
         return invaders
+
+    async def get_player_profile(self) -> PlayerProfile:
+        """Fetch the authenticated user's profile.
+
+        Returns:
+            PlayerProfile object
+
+        Raises:
+            AuthenticationError: If UID is invalid
+            FlashInvaderConnectionError: If connection fails
+            ParseError: If response cannot be parsed
+
+        """
+        _LOGGER.debug("Fetching player profile from Flash Invader API")
+
+        try:
+            async with self._session.get(
+                f"{FLASH_INVADER_BASE_URL}{FLASH_INVADER_ACCOUNT_ENDPOINT}",
+                params={"uid": self._uid},
+                headers=self._headers,
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as response:
+                if response.status == 401:
+                    raise AuthenticationError("Invalid UID")
+                if response.status != 200:
+                    raise FlashInvaderConnectionError(f"Server error: {response.status}")
+                try:
+                    data = await response.json()
+                except (ValueError, aiohttp.ContentTypeError) as err:
+                    raise ParseError("Invalid JSON response") from err
+
+                return PlayerProfile(
+                    name=data.get("name", ""),
+                    score=int(data.get("score", 0)),
+                    rank=int(data.get("rank", 0)),
+                    rank_str=data.get("rank_str", ""),
+                    si_found=int(data.get("si_found", 0)),
+                    city_found=int(data.get("city_found", 0)),
+                )
+
+        except asyncio.TimeoutError as err:
+            raise FlashInvaderConnectionError("Request timed out") from err
+        except aiohttp.ClientError as err:
+            raise FlashInvaderConnectionError(f"Connection failed: {err}") from err
+
+    async def get_followed_players(self) -> list[FollowedPlayer]:
+        """Fetch the list of players followed by the authenticated user.
+
+        Returns:
+            List of FollowedPlayer objects (excluding current_player entry)
+
+        Raises:
+            AuthenticationError: If UID is invalid
+            FlashInvaderConnectionError: If connection fails
+            ParseError: If response cannot be parsed
+
+        """
+        _LOGGER.debug("Fetching followed players from Flash Invader highscore")
+
+        try:
+            async with self._session.get(
+                f"{FLASH_INVADER_BASE_URL}{FLASH_INVADER_HIGHSCORE_ENDPOINT}",
+                params={"uid": self._uid},
+                headers=self._headers,
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as response:
+                if response.status == 401:
+                    raise AuthenticationError("Invalid UID")
+                if response.status != 200:
+                    raise FlashInvaderConnectionError(f"Server error: {response.status}")
+
+                html_content = await response.text()
+
+        except asyncio.TimeoutError as err:
+            raise FlashInvaderConnectionError("Request timed out") from err
+        except aiohttp.ClientError as err:
+            raise FlashInvaderConnectionError(f"Connection failed: {err}") from err
+
+        return self._parse_followed_players(html_content)
+
+    def _parse_followed_players(self, html_content: str) -> list[FollowedPlayer]:
+        """Extract followed_players from the JSON embedded in the highscore page."""
+        import json
+        import re
+
+        match = re.search(r"fillTalbleWithData\(JSON\.parse\('(.+?)'\)\)", html_content, re.DOTALL)
+        if not match:
+            raise ParseError("Could not find player data in highscore page")
+
+        try:
+            raw = match.group(1)
+            # Unescape unicode sequences like \u0022 -> "
+            raw = raw.encode().decode("unicode_escape")
+            data = json.loads(raw)
+        except (ValueError, UnicodeDecodeError) as err:
+            raise ParseError(f"Failed to parse highscore JSON: {err}") from err
+
+        players = []
+        for p in data.get("followed_players", []):
+            if p.get("player_status") == "current_player":
+                continue
+            players.append(
+                FollowedPlayer(
+                    name=p["name"],
+                    score=int(p.get("score", 0)),
+                    rank=int(p.get("rank", 0)),
+                    rank_str=p.get("rank_str", ""),
+                    invaders_count=int(p.get("invaders_count", 0)),
+                )
+            )
+
+        _LOGGER.debug("Parsed %d followed players", len(players))
+        return players
 
     def _parse_invader(self, inv_id: str, data: dict) -> FlashedInvader:
         """Parse a single invader from API response."""

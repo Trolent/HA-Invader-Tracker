@@ -10,7 +10,7 @@ from datetime import date, datetime
 import aiohttp
 from bs4 import BeautifulSoup
 
-from ..const import INVADER_SPOTTER_BASE_URL
+from ..const import INVADER_SPOTTER_BASE_URL, SCRAPE_MAX_RETRIES, SCRAPE_RETRY_BACKOFF
 from ..exceptions import InvaderSpotterConnectionError, ParseError
 from ..models import City, Invader, InvaderStatus, NewsEvent, NewsEventType
 
@@ -95,26 +95,39 @@ class InvaderSpotterScraper:
         _LOGGER.debug("Fetching cities from invader-spotter.art")
         url = f"{INVADER_SPOTTER_BASE_URL}/villes.php"
 
-        try:
-            async with self._session.get(
-                url,
-                timeout=aiohttp.ClientTimeout(total=60),
-            ) as response:
-                if response.status != 200:
-                    raise InvaderSpotterConnectionError(
-                        f"HTTP {response.status} fetching cities"
-                    )
+        last_err: InvaderSpotterConnectionError | None = None
+        for attempt in range(1, SCRAPE_MAX_RETRIES + 1):
+            try:
+                async with self._session.get(
+                    url,
+                    timeout=aiohttp.ClientTimeout(total=60),
+                ) as response:
+                    if response.status != 200:
+                        raise InvaderSpotterConnectionError(
+                            f"HTTP {response.status} fetching cities"
+                        )
 
-                html_content = await response.text()
-                return self._parse_cities_page(html_content)
+                    html_content = await response.text()
+                    return self._parse_cities_page(html_content)
 
-        except asyncio.TimeoutError as err:
-            _LOGGER.warning("Invader Spotter timeout fetching cities")
-            raise InvaderSpotterConnectionError("Timeout fetching cities") from err
+            except asyncio.TimeoutError as err:
+                last_err = InvaderSpotterConnectionError("Timeout fetching cities")
+                _LOGGER.warning(
+                    "Invader Spotter timeout fetching cities (attempt %d/%d)",
+                    attempt, SCRAPE_MAX_RETRIES,
+                )
 
-        except aiohttp.ClientError as err:
-            _LOGGER.warning("Invader Spotter connection error: %s", type(err).__name__)
-            raise InvaderSpotterConnectionError(str(err)) from err
+            except aiohttp.ClientError as err:
+                last_err = InvaderSpotterConnectionError(str(err))
+                _LOGGER.warning(
+                    "Invader Spotter connection error fetching cities (attempt %d/%d): %s",
+                    attempt, SCRAPE_MAX_RETRIES, type(err).__name__,
+                )
+
+            if attempt < SCRAPE_MAX_RETRIES:
+                await asyncio.sleep(SCRAPE_RETRY_BACKOFF * attempt)
+
+        raise last_err
 
     def _parse_cities_page(self, html_content: str) -> list[City]:
         """Parse cities list page."""
@@ -194,14 +207,13 @@ class InvaderSpotterScraper:
     async def _fetch_city_page(
         self, city_code: str, city_name: str, page: int
     ) -> tuple[list[Invader], bool]:
-        """Fetch a single page of invaders for a city.
+        """Fetch a single page of invaders for a city, with retries.
 
         Returns:
             Tuple of (invaders list, has_more_pages)
         """
         url = f"{INVADER_SPOTTER_BASE_URL}/listing.php"
 
-        # The site requires POST with specific form data
         data = {
             "ville": city_code,
             "arron": "00",
@@ -213,37 +225,43 @@ class InvaderSpotterScraper:
             "Content-Type": "application/x-www-form-urlencoded",
         }
 
-        try:
-            async with self._session.post(
-                url,
-                data=data,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=60),
-            ) as response:
-                if response.status != 200:
-                    raise InvaderSpotterConnectionError(
-                        f"HTTP {response.status} for city {city_code} page {page}"
-                    )
+        last_err: InvaderSpotterConnectionError | None = None
+        for attempt in range(1, SCRAPE_MAX_RETRIES + 1):
+            try:
+                async with self._session.post(
+                    url,
+                    data=data,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=60),
+                ) as response:
+                    if response.status != 200:
+                        raise InvaderSpotterConnectionError(
+                            f"HTTP {response.status} for city {city_code} page {page}"
+                        )
 
-                html_content = await response.text()
-                invaders = self._parse_city_page(html_content, city_code, city_name)
-                
-                # Check if there are more pages
-                has_more = self._has_next_page(html_content, page)
-                
-                return invaders, has_more
+                    html_content = await response.text()
+                    invaders = self._parse_city_page(html_content, city_code, city_name)
+                    has_more = self._has_next_page(html_content, page)
+                    return invaders, has_more
 
-        except asyncio.TimeoutError as err:
-            _LOGGER.warning("Invader Spotter timeout for city %s page %d", city_code, page)
-            raise InvaderSpotterConnectionError(f"Timeout for {city_code}") from err
+            except asyncio.TimeoutError as err:
+                last_err = InvaderSpotterConnectionError(f"Timeout for {city_code}")
+                _LOGGER.warning(
+                    "Invader Spotter timeout for city %s page %d (attempt %d/%d)",
+                    city_code, page, attempt, SCRAPE_MAX_RETRIES,
+                )
 
-        except aiohttp.ClientError as err:
-            _LOGGER.warning(
-                "Invader Spotter connection error for %s: %s",
-                city_code,
-                type(err).__name__,
-            )
-            raise InvaderSpotterConnectionError(str(err)) from err
+            except aiohttp.ClientError as err:
+                last_err = InvaderSpotterConnectionError(str(err))
+                _LOGGER.warning(
+                    "Invader Spotter connection error for %s page %d (attempt %d/%d): %s",
+                    city_code, page, attempt, SCRAPE_MAX_RETRIES, type(err).__name__,
+                )
+
+            if attempt < SCRAPE_MAX_RETRIES:
+                await asyncio.sleep(SCRAPE_RETRY_BACKOFF * attempt)
+
+        raise last_err
 
     def _has_next_page(self, html_content: str, current_page: int) -> bool:
         """Check if there's a next page of results."""

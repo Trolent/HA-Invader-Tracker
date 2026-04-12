@@ -21,7 +21,7 @@ from .const import (
     DEFAULT_SCRAPE_INTERVAL_HOURS,
     DOMAIN,
 )
-from .coordinator import FlashInvaderCoordinator, InvaderSpotterCoordinator
+from .coordinator import FlashInvaderCoordinator, FlashInvaderProfileCoordinator, InvaderSpotterCoordinator
 from .processor import DataProcessor
 from .store import StateStore
 
@@ -72,6 +72,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         flash_api,
         api_interval,
     )
+    profile_coordinator = FlashInvaderProfileCoordinator(
+        hass,
+        flash_api,
+        api_interval,
+    )
 
     # Create processor and store
     store = StateStore(hass, entry.entry_id)
@@ -85,6 +90,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.debug("Performing initial data fetch")
     await spotter_coordinator.async_config_entry_first_refresh()
     await flash_coordinator.async_config_entry_first_refresh()
+    await profile_coordinator.async_config_entry_first_refresh()
 
     # Save initial snapshot
     await processor.async_save_snapshot()
@@ -101,6 +107,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = {
         "spotter_coordinator": spotter_coordinator,
         "flash_coordinator": flash_coordinator,
+        "profile_coordinator": profile_coordinator,
         "processor": processor,
         "store": store,
     }

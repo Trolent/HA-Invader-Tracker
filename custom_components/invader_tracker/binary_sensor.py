@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
@@ -108,14 +108,3 @@ class InvaderHasNewBinarySensor(CoordinatorEntity, BinarySensorEntity):
         stats = self._processor.compute_city_stats(self._city_code)
         return stats.new_count > 0
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra state attributes."""
-        if not self.available:
-            return {}
-        stats = self._processor.compute_city_stats(self._city_code)
-        return {
-            "new_count": len(stats.new_invaders),
-            "reactivated_count": len(stats.reactivated_invaders),
-            "total_new": stats.new_count,
-        }

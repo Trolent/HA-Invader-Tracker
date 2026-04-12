@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import CITY_REQUEST_DELAY, COORDINATOR_FLASH, COORDINATOR_SPOTTER
+from .const import CITY_REQUEST_DELAY, COORDINATOR_FLASH, COORDINATOR_PROFILE, COORDINATOR_SPOTTER
 from .exceptions import (
     AuthenticationError,
     InvaderSpotterConnectionError,
@@ -17,13 +17,15 @@ from .exceptions import (
     ParseError,
     RateLimitError,
 )
-from .models import FlashedInvader, Invader, NewsEvent
+from .models import FlashedInvader, FollowedPlayer, Invader, NewsEvent, PlayerProfile
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .api.flash_invader import FlashInvaderAPI
     from .api.invader_spotter import InvaderSpotterScraper
+
+ProfileData = tuple[PlayerProfile, list[FollowedPlayer]]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -335,3 +337,57 @@ class FlashInvaderCoordinator(DataUpdateCoordinator[list[FlashedInvader]]):
                 city_code = inv.id[:2]  # Fallback to first 2 chars
 
             self._flashed_by_city.setdefault(city_code, []).append(inv)
+
+
+class FlashInvaderProfileCoordinator(DataUpdateCoordinator[ProfileData]):
+    """Coordinator for Flash Invader player profile and followed players."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        api: FlashInvaderAPI,
+        update_interval_hours: int,
+    ) -> None:
+        """Initialize the coordinator."""
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=COORDINATOR_PROFILE,
+            update_interval=timedelta(hours=update_interval_hours),
+        )
+        self._api = api
+
+    @property
+    def profile(self) -> PlayerProfile | None:
+        """Return the player profile."""
+        if self.data is None:
+            return None
+        return self.data[0]
+
+    @property
+    def followed_players(self) -> list[FollowedPlayer]:
+        """Return the list of followed players."""
+        if self.data is None:
+            return []
+        return self.data[1]
+
+    async def _async_update_data(self) -> ProfileData:
+        """Fetch profile and followed players."""
+        try:
+            profile, followed = await asyncio.gather(
+                self._api.get_player_profile(),
+                self._api.get_followed_players(),
+            )
+            _LOGGER.debug(
+                "Fetched profile for %s (rank %s) and %d followed players",
+                profile.name, profile.rank_str, len(followed),
+            )
+            return profile, followed
+
+        except AuthenticationError as err:
+            raise ConfigEntryAuthFailed(
+                "Flash Invader authentication failed. Please reconfigure."
+            ) from err
+
+        except (FlashInvaderConnectionError, ParseError) as err:
+            raise UpdateFailed(f"Failed to fetch profile: {err}") from err

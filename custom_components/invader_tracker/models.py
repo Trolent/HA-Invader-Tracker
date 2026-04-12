@@ -235,3 +235,26 @@ class ChangeSet:
     new_invaders: list[Invader] = field(default_factory=list)
     reactivated_invaders: list[Invader] = field(default_factory=list)
     newly_destroyed: list[Invader] = field(default_factory=list)
+
+
+@dataclass
+class PlayerProfile:
+    """Profile of the authenticated user from Flash Invader API."""
+
+    name: str
+    score: int
+    rank: int
+    rank_str: str
+    si_found: int
+    city_found: int
+
+
+@dataclass
+class FollowedPlayer:
+    """A player followed by the authenticated user."""
+
+    name: str
+    score: int
+    rank: int
+    rank_str: str
+    invaders_count: int
