@@ -83,6 +83,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         flash_api,
         api_interval,
         track_followed=track_followed,
+        entry_id=entry.entry_id,
     )
 
     # Create processor and store
