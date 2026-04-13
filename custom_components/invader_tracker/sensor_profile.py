@@ -67,7 +67,7 @@ def _profile_device_info(entry: ConfigEntry, player_name: str) -> DeviceInfo:
 def _followed_device_info(entry: ConfigEntry, player_name: str) -> DeviceInfo:
     """Return device info for a followed player device."""
     return DeviceInfo(
-        identifiers={(DOMAIN, f"{entry.entry_id}_followed_{_slugify(player_name)}"}),
+        identifiers={(DOMAIN, f"{entry.entry_id}_followed_{_slugify(player_name)}")},
         name=f"Invader Tracker - {player_name}",
         manufacturer="Space Invader",
         model="Followed Player",

@@ -106,5 +106,5 @@ class InvaderHasNewBinarySensor(CoordinatorEntity, BinarySensorEntity):
         if not self.available:
             return None
         stats = self._processor.compute_city_stats(self._city_code)
-        return stats.new_count > 0
+        return stats.unflashed_new_count > 0
 
