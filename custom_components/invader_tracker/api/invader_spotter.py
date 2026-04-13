@@ -130,7 +130,7 @@ class InvaderSpotterScraper:
                 except asyncio.CancelledError:
                     raise
 
-        raise last_err
+        raise last_err or InvaderSpotterConnectionError("Failed to fetch cities")
 
     def _parse_cities_page(self, html_content: str) -> list[City]:
         """Parse cities list page."""
@@ -140,7 +140,7 @@ class InvaderSpotterScraper:
 
         # Look for city links - they use javascript:envoi("CODE") format
         for link in soup.find_all("a", href=True):
-            href = link.get("href", "")
+            href = str(link.get("href", ""))
 
             # Match javascript:envoi("CODE") pattern
             match = re.search(r"javascript:envoi\(['\"]([A-Z0-9_]+)['\"]\)", href, re.IGNORECASE)
@@ -270,7 +270,7 @@ class InvaderSpotterScraper:
                 except asyncio.CancelledError:
                     raise
 
-        raise last_err
+        raise last_err or InvaderSpotterConnectionError(f"Failed to fetch city {city_code}")
 
     def _has_next_page(self, html_content: str, current_page: int) -> bool:
         """Check if there's a next page of results."""

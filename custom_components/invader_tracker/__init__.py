@@ -103,10 +103,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await processor.async_save_snapshot()
 
     # Set up listener to save snapshot and refresh news after each spotter update
-    async def _on_spotter_update() -> None:
-        """Save snapshot and refresh news when spotter data updates."""
-        await processor.async_save_snapshot()
-        await processor.async_refresh_news()
+    def _on_spotter_update() -> None:
+        """Schedule snapshot save and news refresh when spotter data updates."""
+        hass.async_create_task(processor.async_save_snapshot())
+        hass.async_create_task(processor.async_refresh_news())
 
     spotter_coordinator.async_add_listener(_on_spotter_update)
 

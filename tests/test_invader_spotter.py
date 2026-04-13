@@ -246,10 +246,10 @@ class TestParseNews:
         """Test parsing full news HTML content."""
         html = """
         <html><body>
-        janvier 2026
-        15 : Ajout de PA_1554
-        10 : Destruction de LYN_042
-        décembre 2025
+        avril 2026
+        10 : Ajout de PA_1554
+        5 : Destruction de LYN_042
+        mars 2026
         25 : Réactivation de PA_008
         </body></html>
         """
