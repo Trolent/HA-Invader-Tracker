@@ -9,9 +9,11 @@ CONF_CITIES: Final = "cities"
 CONF_SCRAPE_INTERVAL: Final = "scrape_interval"
 CONF_API_INTERVAL: Final = "api_interval"
 CONF_NEWS_DAYS: Final = "news_days"
+CONF_TRACK_FOLLOWED: Final = "track_followed"
 
 # Defaults
 DEFAULT_SCRAPE_INTERVAL_HOURS: Final = 24
+DEFAULT_TRACK_FOLLOWED: Final = True
 DEFAULT_API_INTERVAL_HOURS: Final = 1
 DEFAULT_NEWS_DAYS: Final = 30
 MIN_SCRAPE_INTERVAL_HOURS: Final = 1

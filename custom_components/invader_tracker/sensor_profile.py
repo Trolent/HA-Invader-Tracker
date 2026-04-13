@@ -38,7 +38,7 @@ async def async_setup_profile_entities(
         PlayerRegistrationDateSensor(coordinator, entry),
     ]
 
-    if coordinator.data:
+    if coordinator.track_followed and coordinator.data:
         for player in coordinator.followed_players:
             entities.extend([
                 FollowedPlayerScoreSensor(coordinator, entry, player.name),
@@ -58,7 +58,7 @@ def _profile_device_info(entry: ConfigEntry, player_name: str) -> DeviceInfo:
     """Return device info for the main profile device."""
     return DeviceInfo(
         identifiers={(DOMAIN, f"{entry.entry_id}_profile")},
-        name=f"Invader Tracker - {player_name}",
+        name=f"User - {player_name}",
         manufacturer="Space Invader",
         model="Player Profile",
     )
@@ -68,7 +68,7 @@ def _followed_device_info(entry: ConfigEntry, player_name: str) -> DeviceInfo:
     """Return device info for a followed player device."""
     return DeviceInfo(
         identifiers={(DOMAIN, f"{entry.entry_id}_followed_{_slugify(player_name)}")},
-        name=f"Invader Tracker - {player_name}",
+        name=f"User - {player_name}",
         manufacturer="Space Invader",
         model="Followed Player",
     )

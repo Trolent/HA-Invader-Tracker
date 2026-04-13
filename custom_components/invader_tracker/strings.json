@@ -47,7 +47,9 @@
         "data": {
           "cities": "Cities to track",
           "scrape_interval": "Invader-Spotter update frequency",
-          "api_interval": "Flash status update frequency"
+          "api_interval": "Flash status update frequency",
+          "news_days": "News history duration",
+          "track_followed": "Track followed players"
         }
       }
     },

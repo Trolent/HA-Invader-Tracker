@@ -19,10 +19,12 @@ from .const import (
     CONF_CITIES,
     CONF_NEWS_DAYS,
     CONF_SCRAPE_INTERVAL,
+    CONF_TRACK_FOLLOWED,
     CONF_UID,
     DEFAULT_API_INTERVAL_HOURS,
     DEFAULT_NEWS_DAYS,
     DEFAULT_SCRAPE_INTERVAL_HOURS,
+    DEFAULT_TRACK_FOLLOWED,
     DOMAIN,
 )
 from .exceptions import AuthenticationError, InvaderTrackerConnectionError
@@ -315,6 +317,12 @@ class InvaderTrackerOptionsFlow(OptionsFlow):
                                 CONF_NEWS_DAYS, DEFAULT_NEWS_DAYS
                             ),
                         ),
+                        CONF_TRACK_FOLLOWED: user_input.get(
+                            CONF_TRACK_FOLLOWED,
+                            self._get_current_value(
+                                CONF_TRACK_FOLLOWED, DEFAULT_TRACK_FOLLOWED
+                            ),
+                        ),
                     },
                 )
 
@@ -361,6 +369,12 @@ class InvaderTrackerOptionsFlow(OptionsFlow):
                             CONF_NEWS_DAYS, DEFAULT_NEWS_DAYS
                         ),
                     ): vol.In(NEWS_DAYS_OPTIONS),
+                    vol.Optional(
+                        CONF_TRACK_FOLLOWED,
+                        default=self._get_current_value(
+                            CONF_TRACK_FOLLOWED, DEFAULT_TRACK_FOLLOWED
+                        ),
+                    ): bool,
                 }
             ),
             errors=errors,

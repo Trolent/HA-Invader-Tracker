@@ -15,10 +15,12 @@ from .const import (
     CONF_CITIES,
     CONF_NEWS_DAYS,
     CONF_SCRAPE_INTERVAL,
+    CONF_TRACK_FOLLOWED,
     CONF_UID,
     DEFAULT_API_INTERVAL_HOURS,
     DEFAULT_NEWS_DAYS,
     DEFAULT_SCRAPE_INTERVAL_HOURS,
+    DEFAULT_TRACK_FOLLOWED,
     DOMAIN,
 )
 from .coordinator import FlashInvaderCoordinator, FlashInvaderProfileCoordinator, InvaderSpotterCoordinator
@@ -55,6 +57,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONF_NEWS_DAYS,
         entry.data.get(CONF_NEWS_DAYS, DEFAULT_NEWS_DAYS)
     )
+    track_followed = entry.options.get(
+        CONF_TRACK_FOLLOWED,
+        entry.data.get(CONF_TRACK_FOLLOWED, DEFAULT_TRACK_FOLLOWED)
+    )
 
     # Create API clients
     flash_api = FlashInvaderAPI(session, uid)
@@ -76,6 +82,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass,
         flash_api,
         api_interval,
+        track_followed=track_followed,
     )
 
     # Create processor and store
