@@ -95,15 +95,19 @@ Created automatically as soon as a UID is configured. The device is named **"Inv
 | `sensor.cities_found` | Sensor | Number of cities with at least one flash | — |
 | `sensor.registration_date` | Sensor | Account registration date | — |
 
+![Main user entities](docs/images/main-user-entities.png)
+
 ### Followed Player Devices
 
-One device per followed player, named **"Invader Tracker - {name}"**.
+One device per followed player, named **"Invader Tracker - {name}"**. Can be disabled in integration options.
 
 | Entity | Type | Description | Attributes |
 |--------|------|-------------|------------|
 | `sensor.score` | Sensor | Player's total score | — |
 | `sensor.rank` | Sensor | Player's global rank | `rank_str` |
 | `sensor.invaders_found` | Sensor | Player's total invaders flashed | — |
+
+![Followed user entities](docs/images/followed-user-entities.png)
 
 ### City Devices
 
@@ -118,6 +122,8 @@ For each tracked city, the integration creates a **device** with the following e
 | `sensor.new_reactivated` | Sensor | New + reactivated invaders (total) | `new_count`, `reactivated_count` |
 | `sensor.invaders_to_flash` | Sensor | CSV list of IDs to flash | — |
 | `binary_sensor.has_new` | Binary Sensor | ON when new invaders exist | — |
+
+![City entities](docs/images/city-entities.png)
 
 ## Configuration Options
 
