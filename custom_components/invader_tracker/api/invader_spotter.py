@@ -125,7 +125,10 @@ class InvaderSpotterScraper:
                 )
 
             if attempt < SCRAPE_MAX_RETRIES:
-                await asyncio.sleep(SCRAPE_RETRY_BACKOFF * attempt)
+                try:
+                    await asyncio.sleep(SCRAPE_RETRY_BACKOFF * attempt)
+                except asyncio.CancelledError:
+                    raise
 
         raise last_err
 
@@ -196,7 +199,10 @@ class InvaderSpotterScraper:
 
             page += 1
             # Small delay between pages to be respectful
-            await asyncio.sleep(0.5)
+            try:
+                await asyncio.sleep(0.5)
+            except asyncio.CancelledError:
+                raise
 
         _LOGGER.debug(
             "Fetched total %d invaders for %s across %d pages",
@@ -259,7 +265,10 @@ class InvaderSpotterScraper:
                 )
 
             if attempt < SCRAPE_MAX_RETRIES:
-                await asyncio.sleep(SCRAPE_RETRY_BACKOFF * attempt)
+                try:
+                    await asyncio.sleep(SCRAPE_RETRY_BACKOFF * attempt)
+                except asyncio.CancelledError:
+                    raise
 
         raise last_err
 
