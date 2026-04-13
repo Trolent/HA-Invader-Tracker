@@ -110,7 +110,7 @@ class InvaderSpotterScraper:
                     html_content = await response.text()
                     return self._parse_cities_page(html_content)
 
-            except asyncio.TimeoutError as err:
+            except asyncio.TimeoutError:
                 last_err = InvaderSpotterConnectionError("Timeout fetching cities")
                 _LOGGER.warning(
                     "Invader Spotter timeout fetching cities (attempt %d/%d)",
@@ -250,7 +250,7 @@ class InvaderSpotterScraper:
                     has_more = self._has_next_page(html_content, page)
                     return invaders, has_more
 
-            except asyncio.TimeoutError as err:
+            except asyncio.TimeoutError:
                 last_err = InvaderSpotterConnectionError(f"Timeout for {city_code}")
                 _LOGGER.warning(
                     "Invader Spotter timeout for city %s page %d (attempt %d/%d)",

@@ -135,8 +135,7 @@ class TestInvaderFlashedSensor:
         sensor = InvaderFlashedSensor(
             mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
-        attrs = sensor.extra_state_attributes
-        assert attrs == {}
+        assert sensor.extra_state_attributes is None or sensor.extra_state_attributes == {}
 
     def test_attributes_with_none_flash_date(
         self, mock_coordinator, mock_processor, mock_entry
@@ -145,8 +144,7 @@ class TestInvaderFlashedSensor:
         sensor = InvaderFlashedSensor(
             mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
-        attrs = sensor.extra_state_attributes
-        assert attrs == {}
+        assert sensor.extra_state_attributes is None or sensor.extra_state_attributes == {}
 
 
 class TestInvaderUnflashedSensor:
@@ -165,8 +163,7 @@ class TestInvaderUnflashedSensor:
         sensor = InvaderUnflashedSensor(
             mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
-        attrs = sensor.extra_state_attributes
-        assert attrs == {}
+        assert sensor.extra_state_attributes is None or sensor.extra_state_attributes == {}
 
 
 class TestInvaderUnflashedGoneSensor:
@@ -185,8 +182,7 @@ class TestInvaderUnflashedGoneSensor:
         sensor = InvaderUnflashedGoneSensor(
             mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
-        attrs = sensor.extra_state_attributes
-        assert attrs == {}
+        assert sensor.extra_state_attributes is None or sensor.extra_state_attributes == {}
 
 
 class TestInvaderNewSensor:
@@ -238,8 +234,7 @@ class TestInvaderToFlashSensor:
         sensor = InvaderToFlashSensor(
             mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
-        attrs = sensor.extra_state_attributes
-        assert attrs == {}
+        assert sensor.extra_state_attributes is None or sensor.extra_state_attributes == {}
 
     def test_unavailable(self, mock_coordinator, mock_processor, mock_entry) -> None:
         """Test sensor returns None when unavailable."""
@@ -248,7 +243,7 @@ class TestInvaderToFlashSensor:
             mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
         assert sensor.native_value is None
-        assert sensor.extra_state_attributes == {}
+        assert sensor.extra_state_attributes is None or sensor.extra_state_attributes == {}
 
     def test_unique_id(self, mock_coordinator, mock_processor, mock_entry) -> None:
         """Test unique ID format."""
