@@ -9,12 +9,8 @@ from homeassistant.config_entries import ConfigEntry
 
 from custom_components.invader_tracker.const import (
     DOMAIN,
-    SENSOR_FLASHED,
-    SENSOR_NEW,
     SENSOR_TO_FLASH,
     SENSOR_TOTAL,
-    SENSOR_UNFLASHED,
-    SENSOR_UNFLASHED_GONE,
 )
 from custom_components.invader_tracker.models import (
     City,
@@ -89,14 +85,13 @@ class TestInvaderTotalSensor:
         assert sensor.native_value == 3
 
     def test_attributes(self, mock_coordinator, mock_processor, mock_entry) -> None:
-        """Test attributes include invader IDs and flashable count."""
+        """Test attributes include flashable count."""
         sensor = InvaderTotalSensor(
             mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
         attrs = sensor.extra_state_attributes
 
-        assert "invader_ids" in attrs
-        assert len(attrs["invader_ids"]) == 3
+        assert "flashable_count" in attrs
         assert attrs["flashable_count"] == 2  # PA_001 and PA_002
 
     def test_unavailable(self, mock_coordinator, mock_processor, mock_entry) -> None:
@@ -136,37 +131,22 @@ class TestInvaderFlashedSensor:
         assert sensor.native_value == 1
 
     def test_attributes_with_flash_date(self, mock_coordinator, mock_processor, mock_entry) -> None:
-        """Test attributes include flash_date as ISO string."""
+        """Test no extra attributes on flashed sensor."""
         sensor = InvaderFlashedSensor(
             mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
         attrs = sensor.extra_state_attributes
-
-        assert len(attrs["invaders"]) == 1
-        assert attrs["invaders"][0]["id"] == "PA_001"
-        assert attrs["invaders"][0]["flash_date"] == "2024-01-15T10:30:00"
-        assert attrs["total_points"] == 10
+        assert attrs == {}
 
     def test_attributes_with_none_flash_date(
         self, mock_coordinator, mock_processor, mock_entry
     ) -> None:
-        """Test attributes handle None flash_date without crashing."""
-        # Override with a flashed invader that has None flash_date
-        stats = mock_processor.compute_city_stats.return_value
-        stats.flashed_invaders = [
-            FlashedInvader(
-                id="PA_001", name="PA_001", city_id=1, points=10,
-                image_url="", install_date=None, flash_date=None,
-            ),
-        ]
-
+        """Test no extra attributes on flashed sensor (None flash_date)."""
         sensor = InvaderFlashedSensor(
             mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
         attrs = sensor.extra_state_attributes
-
-        # Should not crash - flash_date should be None
-        assert attrs["invaders"][0]["flash_date"] is None
+        assert attrs == {}
 
 
 class TestInvaderUnflashedSensor:
@@ -181,16 +161,12 @@ class TestInvaderUnflashedSensor:
         assert sensor.native_value == 1
 
     def test_attributes(self, mock_coordinator, mock_processor, mock_entry) -> None:
-        """Test attributes include invader details."""
+        """Test no extra attributes on unflashed sensor."""
         sensor = InvaderUnflashedSensor(
             mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
         attrs = sensor.extra_state_attributes
-
-        assert len(attrs["invaders"]) == 1
-        assert attrs["invaders"][0]["id"] == "PA_002"
-        assert attrs["invaders"][0]["status"] == "ok"
-        assert attrs["total_points"] == 20
+        assert attrs == {}
 
 
 class TestInvaderUnflashedGoneSensor:
@@ -205,16 +181,12 @@ class TestInvaderUnflashedGoneSensor:
         assert sensor.native_value == 1
 
     def test_attributes(self, mock_coordinator, mock_processor, mock_entry) -> None:
-        """Test attributes include missed invader details."""
+        """Test no extra attributes on unflashed gone sensor."""
         sensor = InvaderUnflashedGoneSensor(
             mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
         attrs = sensor.extra_state_attributes
-
-        assert len(attrs["invaders"]) == 1
-        assert attrs["invaders"][0]["id"] == "PA_003"
-        assert attrs["invaders"][0]["status"] == "destroyed"
-        assert attrs["missed_points"] == 30
+        assert attrs == {}
 
 
 class TestInvaderNewSensor:
@@ -237,7 +209,6 @@ class TestInvaderNewSensor:
 
         assert attrs["new_count"] == 1
         assert attrs["reactivated_count"] == 0
-        assert attrs["potential_points"] == 20
 
 
 class TestInvaderToFlashSensor:
@@ -263,16 +234,12 @@ class TestInvaderToFlashSensor:
         assert sensor.native_value == "Aucun"
 
     def test_attributes(self, mock_coordinator, mock_processor, mock_entry) -> None:
-        """Test attributes include breakdown."""
+        """Test no extra attributes on to_flash sensor."""
         sensor = InvaderToFlashSensor(
             mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
         attrs = sensor.extra_state_attributes
-
-        assert attrs["new_count"] == 1
-        assert attrs["reactivated_count"] == 0
-        assert attrs["total_count"] == 1
-        assert attrs["potential_points"] == 20
+        assert attrs == {}
 
     def test_unavailable(self, mock_coordinator, mock_processor, mock_entry) -> None:
         """Test sensor returns None when unavailable."""

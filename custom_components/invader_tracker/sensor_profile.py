@@ -13,9 +13,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
+from .coordinator import FlashInvaderProfileCoordinator
 
 if TYPE_CHECKING:
-    from .coordinator import FlashInvaderProfileCoordinator
     from .models import FollowedPlayer
 
 _LOGGER = logging.getLogger(__name__)
@@ -78,7 +78,7 @@ def _followed_device_info(entry: ConfigEntry, player_name: str) -> DeviceInfo:
 # Main player profile sensors
 # ---------------------------------------------------------------------------
 
-class ProfileBaseSensor(CoordinatorEntity, SensorEntity):
+class ProfileBaseSensor(CoordinatorEntity["FlashInvaderProfileCoordinator"], SensorEntity):
     """Base class for main profile sensors."""
 
     _attr_has_entity_name = True
@@ -190,7 +190,7 @@ class PlayerRegistrationDateSensor(ProfileBaseSensor):
     """Sensor for the player's registration date."""
 
     _attr_icon = "mdi:calendar"
-    _attr_state_class = None  # Not a measurement
+    _attr_state_class: SensorStateClass | None = None  # Not a measurement
 
     def __init__(self, coordinator: FlashInvaderProfileCoordinator, entry: ConfigEntry) -> None:
         """Initialize."""
@@ -209,7 +209,7 @@ class PlayerRegistrationDateSensor(ProfileBaseSensor):
 # Followed player sensors
 # ---------------------------------------------------------------------------
 
-class FollowedPlayerBaseSensor(CoordinatorEntity, SensorEntity):
+class FollowedPlayerBaseSensor(CoordinatorEntity["FlashInvaderProfileCoordinator"], SensorEntity):
     """Base class for followed player sensors."""
 
     _attr_has_entity_name = True
