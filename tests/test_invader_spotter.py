@@ -8,10 +8,6 @@ import aiohttp
 import pytest
 
 from custom_components.invader_tracker.api.invader_spotter import InvaderSpotterScraper
-from custom_components.invader_tracker.exceptions import (
-    InvaderSpotterConnectionError,
-    ParseError,
-)
 from custom_components.invader_tracker.models import (
     InvaderStatus,
     NewsEventType,

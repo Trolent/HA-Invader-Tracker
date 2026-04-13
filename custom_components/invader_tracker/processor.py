@@ -90,7 +90,6 @@ class DataProcessor:
         """
         # Get all invaders from spotter coordinator
         all_invaders = self._get_invaders_for_city(city_code)
-        invader_ids = {inv.id for inv in all_invaders}
 
         # Get flashed invaders from flash coordinator
         flashed = self._flash.get_flashed_for_city(city_code)

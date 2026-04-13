@@ -1,11 +1,10 @@
 """Pytest fixtures for Invader Tracker tests."""
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 
 from custom_components.invader_tracker.const import DOMAIN
 from custom_components.invader_tracker.models import (

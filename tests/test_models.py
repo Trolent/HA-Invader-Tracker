@@ -1,13 +1,10 @@
 """Tests for data models."""
-from datetime import date, datetime
+from datetime import datetime
 
-import pytest
 
 from custom_components.invader_tracker.models import (
-    ChangeSet,
     City,
     CityStats,
-    FlashedInvader,
     Invader,
     InvaderStatus,
     StateSnapshot,
