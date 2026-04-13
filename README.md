@@ -85,17 +85,25 @@ Your UID is a unique identifier (UUID v4 format) for your Flash Invader account.
 
 ### Player Profile Device
 
-Created automatically as soon as a UID is configured. Contains:
+Created automatically as soon as a UID is configured. The device is named **"Invader Tracker - {your pseudo}"**.
 
 | Entity | Type | Description | Attributes |
 |--------|------|-------------|------------|
-| `sensor.score` | Sensor | Your total score | `rank`, `rank_str` |
-| `sensor.rank` | Sensor | Your global rank | — |
+| `sensor.score` | Sensor | Your total score | — |
+| `sensor.rank` | Sensor | Your global rank | `rank_str` |
 | `sensor.invaders_found` | Sensor | Total invaders flashed (all cities) | — |
 | `sensor.cities_found` | Sensor | Number of cities with at least one flash | — |
-| `sensor.{player_name}` | Sensor | Score of a followed player | `rank`, `rank_str`, `invaders_count` |
+| `sensor.registration_date` | Sensor | Account registration date | — |
 
-One `sensor.{player_name}` entity is created per followed player.
+### Followed Player Devices
+
+One device per followed player, named **"Invader Tracker - {name}"**.
+
+| Entity | Type | Description | Attributes |
+|--------|------|-------------|------------|
+| `sensor.score` | Sensor | Player's total score | — |
+| `sensor.rank` | Sensor | Player's global rank | `rank_str` |
+| `sensor.invaders_found` | Sensor | Player's total invaders flashed | — |
 
 ### City Devices
 

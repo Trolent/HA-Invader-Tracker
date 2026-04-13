@@ -178,6 +178,7 @@ class FlashInvaderAPI:
                     rank_str=data.get("rank_str", ""),
                     si_found=int(data.get("si_found", 0)),
                     city_found=int(data.get("city_found", 0)),
+                    registration_date=data.get("registration_date", ""),
                 )
 
         except asyncio.TimeoutError as err:
