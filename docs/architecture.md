@@ -1,9 +1,9 @@
 # HA Invader Tracker - Architecture Document
 
-> **Version:** 2.1.0
-> **Last Updated:** 2026-04-12
+> **Version:** 2.1.1
+> **Last Updated:** 2026-04-13
 > **Status:** Production Ready
-> **Integration Version:** 2.1.0
+> **Integration Version:** 2.1.1
 
 ---
 
@@ -50,8 +50,8 @@ The integration exposes **devices per tracked city** (sensors for new, reactivat
 | New/reactivated tracking | News event parsing + status changes | ✅ Complete |
 | Device per city | HA Device Registry integration | ✅ Complete |
 | News aggregation | Real-time updates from invader-spotter.art | ✅ Complete |
-| Player profile device | Score, rank, cities found, invaders found | ✅ Complete |
-| Followed players | One sensor per followed player | ✅ Complete |
+| Player profile device | Score, rank, cities found, invaders found, registration date | ✅ Complete |
+| Followed players | One device per followed player with score, rank, invaders found | ✅ Complete |
 | Scrape retry logic | Exponential backoff on timeout | ✅ Complete |
 
 ---
@@ -100,7 +100,12 @@ graph TB
             DEVP --> P2[sensor.rank]
             DEVP --> P3[sensor.invaders_found]
             DEVP --> P4[sensor.cities_found]
-            DEVP --> P5[sensor.followed_player_x]
+            DEVP --> P5[sensor.registration_date]
+
+            DEVF[Device: Followed Player X]
+            DEVF --> F1[sensor.score]
+            DEVF --> F2[sensor.rank]
+            DEVF --> F3[sensor.invaders_found]
         end
     end
 

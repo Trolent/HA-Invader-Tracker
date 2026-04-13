@@ -283,11 +283,11 @@ class InvaderNewSensor(InvaderBaseSensor):
 
     @property
     def native_value(self) -> int | None:
-        """Return the total count of new and reactivated invaders."""
+        """Return the count of unflashed new and reactivated invaders."""
         if not self.available:
             return None
         stats = self._processor.compute_city_stats(self._city_code)
-        return stats.new_count
+        return stats.unflashed_new_count
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -296,8 +296,8 @@ class InvaderNewSensor(InvaderBaseSensor):
             return {}
         stats = self._processor.compute_city_stats(self._city_code)
         return {
-            "new_count": len(stats.new_invaders),
-            "reactivated_count": len(stats.reactivated_invaders),
+            "new_count": len(stats.unflashed_new),
+            "reactivated_count": len(stats.unflashed_reactivated),
         }
 
 
@@ -346,18 +346,20 @@ class InvaderToFlashSensor(CoordinatorEntity, SensorEntity):
         return self._city_code in self.coordinator.data
 
     @property
-    def native_value(self) -> str | None:
-        """Return the list of invaders to flash as text."""
+    def native_value(self) -> int | None:
+        """Return the count of invaders to flash."""
         if not self.available:
             return None
         stats = self._processor.compute_city_stats(self._city_code)
-        
-        # Combine new and reactivated unflashed invaders
+        return len(stats.unflashed_new) + len(stats.unflashed_reactivated)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the list of invader IDs to flash."""
+        if not self.available:
+            return {}
+        stats = self._processor.compute_city_stats(self._city_code)
         to_flash_ids = [inv.id for inv in stats.unflashed_new] + \
                        [inv.id for inv in stats.unflashed_reactivated]
-        
-        if not to_flash_ids:
-            return "Aucun"
-        
-        return ", ".join(to_flash_ids)
+        return {"invader_ids": to_flash_ids}
 

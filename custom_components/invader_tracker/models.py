@@ -247,6 +247,7 @@ class PlayerProfile:
     rank_str: str
     si_found: int
     city_found: int
+    registration_date: str = ""
 
 
 @dataclass

@@ -35,24 +35,18 @@ async def async_setup_profile_entities(
         PlayerRankSensor(coordinator, entry),
         PlayerInvadersFoundSensor(coordinator, entry),
         PlayerCitiesFoundSensor(coordinator, entry),
+        PlayerRegistrationDateSensor(coordinator, entry),
     ]
 
-    # Add one sensor per followed player (based on current data)
     if coordinator.data:
         for player in coordinator.followed_players:
-            entities.append(FollowedPlayerSensor(coordinator, entry, player.name))
+            entities.extend([
+                FollowedPlayerScoreSensor(coordinator, entry, player.name),
+                FollowedPlayerRankSensor(coordinator, entry, player.name),
+                FollowedPlayerInvadersFoundSensor(coordinator, entry, player.name),
+            ])
 
     async_add_entities(entities)
-
-
-def _profile_device_info(entry: ConfigEntry) -> DeviceInfo:
-    """Return device info for the profile device."""
-    return DeviceInfo(
-        identifiers={(DOMAIN, f"{entry.entry_id}_profile")},
-        name="Invader Tracker - Profil",
-        manufacturer="Space Invader",
-        model="Player Profile",
-    )
 
 
 def _slugify(name: str) -> str:
@@ -60,8 +54,32 @@ def _slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9_]", "_", name.lower()).strip("_")
 
 
+def _profile_device_info(entry: ConfigEntry, player_name: str) -> DeviceInfo:
+    """Return device info for the main profile device."""
+    return DeviceInfo(
+        identifiers={(DOMAIN, f"{entry.entry_id}_profile")},
+        name=f"Invader Tracker - {player_name}",
+        manufacturer="Space Invader",
+        model="Player Profile",
+    )
+
+
+def _followed_device_info(entry: ConfigEntry, player_name: str) -> DeviceInfo:
+    """Return device info for a followed player device."""
+    return DeviceInfo(
+        identifiers={(DOMAIN, f"{entry.entry_id}_followed_{_slugify(player_name)}"}),
+        name=f"Invader Tracker - {player_name}",
+        manufacturer="Space Invader",
+        model="Followed Player",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Main player profile sensors
+# ---------------------------------------------------------------------------
+
 class ProfileBaseSensor(CoordinatorEntity, SensorEntity):
-    """Base class for profile sensors."""
+    """Base class for main profile sensors."""
 
     _attr_has_entity_name = True
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -79,8 +97,9 @@ class ProfileBaseSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return device info."""
-        return _profile_device_info(self._entry)
+        """Return device info, using the player's name once available."""
+        name = self.coordinator.profile.name if self.coordinator.profile else "Profil"
+        return _profile_device_info(self._entry, name)
 
     @property
     def available(self) -> bool:
@@ -105,17 +124,6 @@ class PlayerScoreSensor(ProfileBaseSensor):
             return None
         return self.coordinator.profile.score
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return rank as attribute."""
-        if not self.available:
-            return {}
-        profile = self.coordinator.profile
-        return {
-            "rank": profile.rank,
-            "rank_str": profile.rank_str,
-        }
-
 
 class PlayerRankSensor(ProfileBaseSensor):
     """Sensor for the player's global rank."""
@@ -134,9 +142,16 @@ class PlayerRankSensor(ProfileBaseSensor):
             return None
         return self.coordinator.profile.rank
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return rank_str as attribute."""
+        if not self.available:
+            return {}
+        return {"rank_str": self.coordinator.profile.rank_str}
+
 
 class PlayerInvadersFoundSensor(ProfileBaseSensor):
-    """Sensor for total invaders found by the player."""
+    """Sensor for total invaders found."""
 
     _attr_icon = "mdi:space-invaders"
 
@@ -154,7 +169,7 @@ class PlayerInvadersFoundSensor(ProfileBaseSensor):
 
 
 class PlayerCitiesFoundSensor(ProfileBaseSensor):
-    """Sensor for total cities where the player has flashed at least one invader."""
+    """Sensor for total cities with at least one flash."""
 
     _attr_icon = "mdi:city"
 
@@ -171,30 +186,52 @@ class PlayerCitiesFoundSensor(ProfileBaseSensor):
         return self.coordinator.profile.city_found
 
 
-class FollowedPlayerSensor(CoordinatorEntity, SensorEntity):
-    """Sensor tracking a followed player's score."""
+class PlayerRegistrationDateSensor(ProfileBaseSensor):
+    """Sensor for the player's registration date."""
+
+    _attr_icon = "mdi:calendar"
+    _attr_state_class = None  # Not a measurement
+
+    def __init__(self, coordinator: FlashInvaderProfileCoordinator, entry: ConfigEntry) -> None:
+        """Initialize."""
+        super().__init__(coordinator, entry, "registration_date")
+        self._attr_name = "Registration Date"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the registration date."""
+        if not self.available:
+            return None
+        return self.coordinator.profile.registration_date or None
+
+
+# ---------------------------------------------------------------------------
+# Followed player sensors
+# ---------------------------------------------------------------------------
+
+class FollowedPlayerBaseSensor(CoordinatorEntity, SensorEntity):
+    """Base class for followed player sensors."""
 
     _attr_has_entity_name = True
     _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_icon = "mdi:account-star"
 
     def __init__(
         self,
         coordinator: FlashInvaderProfileCoordinator,
         entry: ConfigEntry,
         player_name: str,
+        sensor_type: str,
     ) -> None:
         """Initialize."""
         super().__init__(coordinator)
         self._entry = entry
         self._player_name = player_name
-        self._attr_unique_id = f"{entry.entry_id}_followed_{_slugify(player_name)}"
-        self._attr_name = player_name
+        self._attr_unique_id = f"{entry.entry_id}_followed_{_slugify(player_name)}_{sensor_type}"
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return device info."""
-        return _profile_device_info(self._entry)
+        """Return device info for this followed player."""
+        return _followed_device_info(self._entry, self._player_name)
 
     @property
     def available(self) -> bool:
@@ -208,6 +245,22 @@ class FollowedPlayerSensor(CoordinatorEntity, SensorEntity):
                 return p
         return None
 
+
+class FollowedPlayerScoreSensor(FollowedPlayerBaseSensor):
+    """Score sensor for a followed player."""
+
+    _attr_icon = "mdi:trophy"
+
+    def __init__(
+        self,
+        coordinator: FlashInvaderProfileCoordinator,
+        entry: ConfigEntry,
+        player_name: str,
+    ) -> None:
+        """Initialize."""
+        super().__init__(coordinator, entry, player_name, "score")
+        self._attr_name = "Score"
+
     @property
     def native_value(self) -> int | None:
         """Return the player's score."""
@@ -216,16 +269,60 @@ class FollowedPlayerSensor(CoordinatorEntity, SensorEntity):
         player = self._get_player()
         return player.score if player else None
 
+
+class FollowedPlayerRankSensor(FollowedPlayerBaseSensor):
+    """Rank sensor for a followed player."""
+
+    _attr_icon = "mdi:podium"
+
+    def __init__(
+        self,
+        coordinator: FlashInvaderProfileCoordinator,
+        entry: ConfigEntry,
+        player_name: str,
+    ) -> None:
+        """Initialize."""
+        super().__init__(coordinator, entry, player_name, "rank")
+        self._attr_name = "Rank"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the player's rank."""
+        if not self.available:
+            return None
+        player = self._get_player()
+        return player.rank if player else None
+
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return rank and invaders count."""
+        """Return rank_str as attribute."""
         if not self.available:
             return {}
         player = self._get_player()
         if not player:
             return {}
-        return {
-            "rank": player.rank,
-            "rank_str": player.rank_str,
-            "invaders_count": player.invaders_count,
-        }
+        return {"rank_str": player.rank_str}
+
+
+class FollowedPlayerInvadersFoundSensor(FollowedPlayerBaseSensor):
+    """Invaders found sensor for a followed player."""
+
+    _attr_icon = "mdi:space-invaders"
+
+    def __init__(
+        self,
+        coordinator: FlashInvaderProfileCoordinator,
+        entry: ConfigEntry,
+        player_name: str,
+    ) -> None:
+        """Initialize."""
+        super().__init__(coordinator, entry, player_name, "invaders_found")
+        self._attr_name = "Invaders Found"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the player's invader count."""
+        if not self.available:
+            return None
+        player = self._get_player()
+        return player.invaders_count if player else None

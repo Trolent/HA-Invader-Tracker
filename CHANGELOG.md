@@ -5,6 +5,23 @@ All notable changes to the Invader Tracker integration will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-04-13
+
+### Added
+
+- **Registration Date** — nouvelle entité sur le profil principal
+- **Device par joueur suivi** — chaque joueur suivi a maintenant son propre appareil "Invader Tracker - {NOM}" avec 3 entités : `Score`, `Rank` (attribut `rank_str`), `Invaders Found`
+
+### Fixed
+
+- `New & Reactivated` excluait incorrectement les invaders déjà flashés — utilise désormais `unflashed_new_count` pour être cohérent avec `Invaders To Flash`
+
+### Changed
+
+- Le device profil principal s'appelle désormais **"Invader Tracker - {pseudo}"** (ex: "Invader Tracker - TROPLENT") au lieu de "Invader Tracker - Profil"
+- `sensor.score` n'a plus `rank`/`rank_str` en attributs — ces infos sont sur `sensor.rank`
+- `sensor.rank` a `rank_str` en attribut (cohérent avec les joueurs suivis)
+
 ## [2.1.0] - 2026-04-12
 
 ### Added
