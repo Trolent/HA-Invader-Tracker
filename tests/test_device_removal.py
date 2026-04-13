@@ -55,16 +55,11 @@ async def test_city_removal_deletes_device() -> None:
     device_registry.async_remove_device = MagicMock()
 
     with patch(
-        "custom_components.invader_tracker.async_get_device_registry",
+        "homeassistant.helpers.device_registry.async_get",
         return_value=device_registry,
     ):
         from custom_components.invader_tracker import async_update_options
-
-        with patch(
-            "homeassistant.helpers.device_registry.async_get",
-            return_value=device_registry,
-        ):
-            await async_update_options(hass, entry)
+        await async_update_options(hass, entry)
 
     device_registry.async_get_device.assert_called_once_with(
         identifiers={(DOMAIN, f"{entry_id}_LYN")}

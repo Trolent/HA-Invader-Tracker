@@ -82,7 +82,7 @@ class ProfileBaseSensor(CoordinatorEntity["FlashInvaderProfileCoordinator"], Sen
     """Base class for main profile sensors."""
 
     _attr_has_entity_name = True
-    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_state_class: SensorStateClass | None = SensorStateClass.MEASUREMENT
 
     def __init__(
         self,
@@ -96,6 +96,11 @@ class ProfileBaseSensor(CoordinatorEntity["FlashInvaderProfileCoordinator"], Sen
         self._attr_unique_id = f"{entry.entry_id}_profile_{sensor_type}"
 
     @property
+    def _profile(self):
+        """Return profile, guaranteed non-None when available is True."""
+        return self.coordinator.profile
+
+    @property
     def device_info(self) -> DeviceInfo:
         """Return device info, using the player's name once available."""
         name = self.coordinator.profile.name if self.coordinator.profile else "Profil"
@@ -104,7 +109,11 @@ class ProfileBaseSensor(CoordinatorEntity["FlashInvaderProfileCoordinator"], Sen
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        return self.coordinator.last_update_success and self.coordinator.data is not None
+        return (
+            self.coordinator.last_update_success
+            and self.coordinator.data is not None
+            and self.coordinator.profile is not None
+        )
 
 
 class PlayerScoreSensor(ProfileBaseSensor):
@@ -122,7 +131,9 @@ class PlayerScoreSensor(ProfileBaseSensor):
         """Return the score."""
         if not self.available:
             return None
-        return self.coordinator.profile.score
+        profile = self.coordinator.profile
+        assert profile is not None
+        return profile.score
 
 
 class PlayerRankSensor(ProfileBaseSensor):
@@ -140,14 +151,18 @@ class PlayerRankSensor(ProfileBaseSensor):
         """Return the rank."""
         if not self.available:
             return None
-        return self.coordinator.profile.rank
+        profile = self.coordinator.profile
+        assert profile is not None
+        return profile.rank
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return rank_str as attribute."""
         if not self.available:
             return {}
-        return {"rank_str": self.coordinator.profile.rank_str}
+        profile = self.coordinator.profile
+        assert profile is not None
+        return {"rank_str": profile.rank_str}
 
 
 class PlayerInvadersFoundSensor(ProfileBaseSensor):
@@ -165,7 +180,9 @@ class PlayerInvadersFoundSensor(ProfileBaseSensor):
         """Return the total invaders found."""
         if not self.available:
             return None
-        return self.coordinator.profile.si_found
+        profile = self.coordinator.profile
+        assert profile is not None
+        return profile.si_found
 
 
 class PlayerCitiesFoundSensor(ProfileBaseSensor):
@@ -183,7 +200,9 @@ class PlayerCitiesFoundSensor(ProfileBaseSensor):
         """Return the number of cities."""
         if not self.available:
             return None
-        return self.coordinator.profile.city_found
+        profile = self.coordinator.profile
+        assert profile is not None
+        return profile.city_found
 
 
 class PlayerRegistrationDateSensor(ProfileBaseSensor):
@@ -202,7 +221,9 @@ class PlayerRegistrationDateSensor(ProfileBaseSensor):
         """Return the registration date."""
         if not self.available:
             return None
-        return self.coordinator.profile.registration_date or None
+        profile = self.coordinator.profile
+        assert profile is not None
+        return profile.registration_date or None
 
 
 # ---------------------------------------------------------------------------
