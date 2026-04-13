@@ -131,7 +131,10 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
             
             # Polite delay between requests (except first scrape)
             if scraped_count > 0:
-                await asyncio.sleep(CITY_REQUEST_DELAY)
+                try:
+                    await asyncio.sleep(CITY_REQUEST_DELAY)
+                except asyncio.CancelledError:
+                    raise
 
             try:
                 invaders = await self._scraper.get_city_invaders(city_code, city_name)
