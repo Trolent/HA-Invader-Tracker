@@ -117,7 +117,7 @@ class InvaderBaseSensor(CoordinatorEntity, SensorEntity):
         """Return device info."""
         return DeviceInfo(
             identifiers={(DOMAIN, f"{self._entry.entry_id}_{self._city_code}")},
-            name=f"Invader Tracker - {self._city_name}",
+            name=f"City - {self._city_name}",
             manufacturer="Space Invader",
             model="City Tracker",
             sw_version="1.0",
@@ -330,7 +330,7 @@ class InvaderToFlashSensor(CoordinatorEntity, SensorEntity):
         """Return device info."""
         return DeviceInfo(
             identifiers={(DOMAIN, f"{self._entry.entry_id}_{self._city_code}")},
-            name=f"Invader Tracker - {self._city_name}",
+            name=f"City - {self._city_name}",
             manufacturer="Space Invader",
             model="City Tracker",
             sw_version="1.0",
@@ -346,20 +346,14 @@ class InvaderToFlashSensor(CoordinatorEntity, SensorEntity):
         return self._city_code in self.coordinator.data
 
     @property
-    def native_value(self) -> int | None:
-        """Return the count of invaders to flash."""
+    def native_value(self) -> str | None:
+        """Return the list of new and reactivated unflashed invaders as text."""
         if not self.available:
             return None
         stats = self._processor.compute_city_stats(self._city_code)
-        return len(stats.unflashed_new) + len(stats.unflashed_reactivated)
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the list of invader IDs to flash."""
-        if not self.available:
-            return {}
-        stats = self._processor.compute_city_stats(self._city_code)
         to_flash_ids = [inv.id for inv in stats.unflashed_new] + \
                        [inv.id for inv in stats.unflashed_reactivated]
-        return {"invader_ids": to_flash_ids}
+        if not to_flash_ids:
+            return "Aucun"
+        return ", ".join(to_flash_ids)
 

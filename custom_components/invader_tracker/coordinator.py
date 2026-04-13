@@ -350,6 +350,7 @@ class FlashInvaderProfileCoordinator(DataUpdateCoordinator[ProfileData]):
         hass: HomeAssistant,
         api: FlashInvaderAPI,
         update_interval_hours: int,
+        track_followed: bool = True,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -359,6 +360,12 @@ class FlashInvaderProfileCoordinator(DataUpdateCoordinator[ProfileData]):
             update_interval=timedelta(hours=update_interval_hours),
         )
         self._api = api
+        self._track_followed = track_followed
+
+    @property
+    def track_followed(self) -> bool:
+        """Return whether followed player tracking is enabled."""
+        return self._track_followed
 
     @property
     def profile(self) -> PlayerProfile | None:
@@ -375,12 +382,17 @@ class FlashInvaderProfileCoordinator(DataUpdateCoordinator[ProfileData]):
         return self.data[1]
 
     async def _async_update_data(self) -> ProfileData:
-        """Fetch profile and followed players."""
+        """Fetch profile and optionally followed players."""
         try:
-            profile, followed = await asyncio.gather(
-                self._api.get_player_profile(),
-                self._api.get_followed_players(),
-            )
+            if self._track_followed:
+                profile, followed = await asyncio.gather(
+                    self._api.get_player_profile(),
+                    self._api.get_followed_players(),
+                )
+            else:
+                profile = await self._api.get_player_profile()
+                followed = []
+
             _LOGGER.debug(
                 "Fetched profile for %s (rank %s) and %d followed players",
                 profile.name, profile.rank_str, len(followed),
@@ -392,5 +404,5 @@ class FlashInvaderProfileCoordinator(DataUpdateCoordinator[ProfileData]):
                 "Flash Invader authentication failed. Please reconfigure."
             ) from err
 
-        except (FlashInvaderConnectionError, ParseError) as err:
+        except (InvaderTrackerConnectionError, ParseError) as err:
             raise UpdateFailed(f"Failed to fetch profile: {err}") from err

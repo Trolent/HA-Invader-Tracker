@@ -49,7 +49,8 @@
           "cities": "Villes à suivre",
           "scrape_interval": "Fréquence de mise à jour Invader-Spotter",
           "api_interval": "Fréquence de mise à jour du statut Flash",
-          "news_days": "Période de détection nouveau/réactivé"
+          "news_days": "Période de détection nouveau/réactivé",
+          "track_followed": "Suivre les joueurs suivis"
         }
       }
     },

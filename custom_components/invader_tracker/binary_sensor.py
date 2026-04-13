@@ -85,7 +85,7 @@ class InvaderHasNewBinarySensor(CoordinatorEntity, BinarySensorEntity):
         """Return device info."""
         return DeviceInfo(
             identifiers={(DOMAIN, f"{self._entry.entry_id}_{self._city_code}")},
-            name=f"Invader Tracker - {self._city_name}",
+            name=f"City - {self._city_name}",
             manufacturer="Space Invader",
             model="City Tracker",
             sw_version="1.0",

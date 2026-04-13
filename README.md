@@ -129,6 +129,7 @@ For each tracked city, the integration creates a **device** with the following e
 | **Scrape Interval** | Dropdown | 24 hours | How often to check invader-spotter.art |
 | **API Interval** | Dropdown | 1 hour | How often to check your Flash Invader data |
 | **News Days** | Dropdown | 30 days | How many days of news history to track |
+| **Track followed players** | Toggle | Enabled | Create devices and sensors for players you follow. Disable to skip the extra API call and hide followed player entities. |
 
 ### Recommended Settings
 
