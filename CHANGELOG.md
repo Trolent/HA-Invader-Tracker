@@ -5,6 +5,17 @@ All notable changes to the Invader Tracker integration will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-04-13
+
+### Added
+
+- **Détection automatique des nouveaux joueurs suivis** — l'intégration se recharge automatiquement quand un nouveau joueur est suivi dans l'app Flash Invader, créant le nouvel appareil et ses entités sans intervention manuelle.
+
+### Fixed
+
+- Corrections CI : mypy (`ConfigFlowResult`, types `CoordinatorEntity`, `_attr_state_class`), ruff (imports inutilisés), listener async via `hass.async_create_task`
+- Tests mis à jour pour correspondre aux attributs simplifiés des capteurs
+
 ## [2.2.0] - 2026-04-13
 
 ### Added
