@@ -351,6 +351,7 @@ class FlashInvaderProfileCoordinator(DataUpdateCoordinator[ProfileData]):
         api: FlashInvaderAPI,
         update_interval_hours: int,
         track_followed: bool = True,
+        entry_id: str = "",
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -361,6 +362,8 @@ class FlashInvaderProfileCoordinator(DataUpdateCoordinator[ProfileData]):
         )
         self._api = api
         self._track_followed = track_followed
+        self._entry_id = entry_id
+        self._known_followed_names: set[str] = set()
 
     @property
     def track_followed(self) -> bool:
@@ -397,6 +400,24 @@ class FlashInvaderProfileCoordinator(DataUpdateCoordinator[ProfileData]):
                 "Fetched profile for %s (rank %s) and %d followed players",
                 profile.name, profile.rank_str, len(followed),
             )
+
+            # Detect new followed players and trigger a config entry reload
+            if self._track_followed:
+                current_names = {p.name for p in followed}
+                new_players = current_names - self._known_followed_names
+                if self._known_followed_names and new_players:
+                    _LOGGER.info(
+                        "New followed player(s) detected: %s — reloading integration",
+                        ", ".join(new_players),
+                    )
+                    self._known_followed_names = current_names
+                    if self._entry_id:
+                        self.hass.async_create_task(
+                            self.hass.config_entries.async_reload(self._entry_id)
+                        )
+                else:
+                    self._known_followed_names = current_names
+
             return profile, followed
 
         except AuthenticationError as err:
