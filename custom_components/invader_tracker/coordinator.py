@@ -396,6 +396,18 @@ class FlashInvaderProfileCoordinator(DataUpdateCoordinator[ProfileData]):
                 profile = await self._api.get_player_profile()
                 followed = []
 
+            # Enrich profile with total worldwide count (populated by FlashInvaderCoordinator)
+            profile = PlayerProfile(
+                name=profile.name,
+                score=profile.score,
+                rank=profile.rank,
+                rank_str=profile.rank_str,
+                si_found=profile.si_found,
+                city_found=profile.city_found,
+                registration_date=profile.registration_date,
+                total_si_count=self._api.total_si_count,
+            )
+
             _LOGGER.debug(
                 "Fetched profile for %s (rank %s) and %d followed players",
                 profile.name, profile.rank_str, len(followed),

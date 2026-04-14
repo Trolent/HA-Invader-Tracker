@@ -36,6 +36,7 @@ async def async_setup_profile_entities(
         PlayerInvadersFoundSensor(coordinator, entry),
         PlayerCitiesFoundSensor(coordinator, entry),
         PlayerRegistrationDateSensor(coordinator, entry),
+        PlayerTotalWorldSensor(coordinator, entry),
     ]
 
     if coordinator.track_followed and coordinator.data:
@@ -224,6 +225,26 @@ class PlayerRegistrationDateSensor(ProfileBaseSensor):
         profile = self.coordinator.profile
         assert profile is not None
         return profile.registration_date or None
+
+
+class PlayerTotalWorldSensor(ProfileBaseSensor):
+    """Sensor for the total number of invaders worldwide."""
+
+    _attr_icon = "mdi:earth"
+
+    def __init__(self, coordinator: FlashInvaderProfileCoordinator, entry: ConfigEntry) -> None:
+        """Initialize."""
+        super().__init__(coordinator, entry, "total_world")
+        self._attr_name = "Total Invaders Worldwide"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the total worldwide invader count."""
+        if not self.available:
+            return None
+        profile = self.coordinator.profile
+        assert profile is not None
+        return profile.total_si_count or None
 
 
 # ---------------------------------------------------------------------------

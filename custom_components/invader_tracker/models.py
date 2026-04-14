@@ -248,6 +248,7 @@ class PlayerProfile:
     si_found: int
     city_found: int
     registration_date: str = ""
+    total_si_count: int = 0
 
 
 @dataclass
