@@ -38,6 +38,12 @@ class FlashInvaderAPI:
         """
         self._session = session
         self._uid = uid
+        self._total_si_count: int = 0
+
+    @property
+    def total_si_count(self) -> int:
+        """Return the total worldwide invader count (populated after get_flashed_invaders)."""
+        return self._total_si_count
 
     @property
     def _headers(self) -> dict[str, str]:
@@ -129,6 +135,9 @@ class FlashInvaderAPI:
             _LOGGER.error("Flash Invader API: Missing 'invaders' key")
             raise InvalidResponseError("Response missing 'invaders' key")
 
+        # Cache global stats for use by get_player_profile
+        self._total_si_count = int(data.get("total_si_count", 0))
+
         invaders: list[FlashedInvader] = []
         for inv_id, inv_data in data["invaders"].items():
             try:
@@ -136,9 +145,8 @@ class FlashInvaderAPI:
                 invaders.append(invader)
             except (KeyError, TypeError, ValueError) as err:
                 _LOGGER.warning("Failed to parse invader %s: %s", inv_id, err)
-                # Continue processing other invaders
 
-        _LOGGER.debug("Parsed %d flashed invaders", len(invaders))
+        _LOGGER.debug("Parsed %d flashed invaders (total worldwide: %d)", len(invaders), self._total_si_count)
         return invaders
 
     async def get_player_profile(self) -> PlayerProfile:
