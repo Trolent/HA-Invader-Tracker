@@ -6,20 +6,25 @@ DOMAIN: Final = "invader_tracker"
 # Configuration keys
 CONF_UID: Final = "uid"
 CONF_CITIES: Final = "cities"
-CONF_SCRAPE_INTERVAL: Final = "scrape_interval"
-CONF_API_INTERVAL: Final = "api_interval"
+CONF_UPDATE_INTERVAL: Final = "update_interval"  # minutes, applies to all data sources
 CONF_NEWS_DAYS: Final = "news_days"
+CONF_NEW_CITY_DAYS: Final = "new_city_days"
 CONF_TRACK_FOLLOWED: Final = "track_followed"
 
+# Kept for migration of existing entries
+CONF_SCRAPE_INTERVAL: Final = "scrape_interval"
+CONF_API_INTERVAL: Final = "api_interval"
+
 # Defaults
-DEFAULT_SCRAPE_INTERVAL_HOURS: Final = 24
+DEFAULT_UPDATE_INTERVAL_MINUTES: Final = 60  # 1 hour
+MIN_UPDATE_INTERVAL_MINUTES: Final = 15
 DEFAULT_TRACK_FOLLOWED: Final = True
-DEFAULT_API_INTERVAL_HOURS: Final = 1
 DEFAULT_NEWS_DAYS: Final = 30
-MIN_SCRAPE_INTERVAL_HOURS: Final = 1
-MAX_SCRAPE_INTERVAL_HOURS: Final = 720  # 30 days
-MIN_API_INTERVAL_HOURS: Final = 1
-MAX_API_INTERVAL_HOURS: Final = 24
+DEFAULT_NEW_CITY_DAYS: Final = 7
+
+# Legacy defaults (used only for migration)
+DEFAULT_SCRAPE_INTERVAL_HOURS: Final = 24
+DEFAULT_API_INTERVAL_HOURS: Final = 1
 
 # API URLs
 FLASH_INVADER_BASE_URL: Final = "https://api.space-invaders.com"
@@ -27,6 +32,7 @@ FLASH_INVADER_ENDPOINT: Final = "/flashinvaders_v3_pas_trop_predictif/api/galler
 FLASH_INVADER_ACCOUNT_ENDPOINT: Final = "/flashinvaders_v3_pas_trop_predictif/api/account"
 FLASH_INVADER_HIGHSCORE_ENDPOINT: Final = "/flashinvaders_v3_pas_trop_predictif/app_web/account/highscore"
 INVADER_SPOTTER_BASE_URL: Final = "https://www.invader-spotter.art"
+AWAZLEON_BASE_URL: Final = "https://www.awazleon.space"
 
 # Storage
 STORAGE_VERSION: Final = 1

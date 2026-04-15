@@ -8,16 +8,20 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .api.awazleon import AwazleonClient
 from .api.flash_invader import FlashInvaderAPI
 from .api.invader_spotter import InvaderSpotterScraper
 from .const import (
     CONF_API_INTERVAL,
     CONF_CITIES,
+    CONF_NEW_CITY_DAYS,
     CONF_NEWS_DAYS,
     CONF_SCRAPE_INTERVAL,
     CONF_TRACK_FOLLOWED,
+    CONF_UPDATE_INTERVAL,
     CONF_UID,
     DEFAULT_API_INTERVAL_HOURS,
+    DEFAULT_NEW_CITY_DAYS,
     DEFAULT_NEWS_DAYS,
     DEFAULT_SCRAPE_INTERVAL_HOURS,
     DEFAULT_TRACK_FOLLOWED,
@@ -43,19 +47,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Get configuration - options override data (for editable settings)
     uid = entry.data[CONF_UID]
-    # Use options if available, otherwise fall back to data
     cities = entry.options.get(CONF_CITIES) or entry.data.get(CONF_CITIES, {})
-    scrape_interval = entry.options.get(
-        CONF_SCRAPE_INTERVAL,
-        entry.data.get(CONF_SCRAPE_INTERVAL, DEFAULT_SCRAPE_INTERVAL_HOURS)
-    )
-    api_interval = entry.options.get(
-        CONF_API_INTERVAL,
-        entry.data.get(CONF_API_INTERVAL, DEFAULT_API_INTERVAL_HOURS)
-    )
+
+    # Unified update interval (minutes). Migrate legacy hour-based keys if needed.
+    if CONF_UPDATE_INTERVAL in entry.options or CONF_UPDATE_INTERVAL in entry.data:
+        update_interval_minutes = int(
+            entry.options.get(CONF_UPDATE_INTERVAL, entry.data.get(CONF_UPDATE_INTERVAL))
+        )
+    else:
+        # Migrate: take the smaller of legacy scrape_interval / api_interval (both in hours)
+        scrape_h = entry.options.get(
+            CONF_SCRAPE_INTERVAL, entry.data.get(CONF_SCRAPE_INTERVAL, DEFAULT_SCRAPE_INTERVAL_HOURS)
+        )
+        api_h = entry.options.get(
+            CONF_API_INTERVAL, entry.data.get(CONF_API_INTERVAL, DEFAULT_API_INTERVAL_HOURS)
+        )
+        update_interval_minutes = min(int(scrape_h), int(api_h)) * 60
+
     news_days = entry.options.get(
         CONF_NEWS_DAYS,
         entry.data.get(CONF_NEWS_DAYS, DEFAULT_NEWS_DAYS)
+    )
+    new_city_days = entry.options.get(
+        CONF_NEW_CITY_DAYS,
+        entry.data.get(CONF_NEW_CITY_DAYS, DEFAULT_NEW_CITY_DAYS)
     )
     track_followed = entry.options.get(
         CONF_TRACK_FOLLOWED,
@@ -64,31 +79,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Create API clients
     flash_api = FlashInvaderAPI(session, uid)
+    awazleon_client = AwazleonClient(session)
     spotter_scraper = InvaderSpotterScraper(session)
 
-    # Create coordinators
+    # Create coordinators (all share the same update interval)
     spotter_coordinator = InvaderSpotterCoordinator(
         hass,
+        awazleon_client,
         spotter_scraper,
         cities,
-        scrape_interval,
+        update_interval_minutes,
     )
     flash_coordinator = FlashInvaderCoordinator(
         hass,
         flash_api,
-        api_interval,
+        update_interval_minutes,
     )
     profile_coordinator = FlashInvaderProfileCoordinator(
         hass,
         flash_api,
-        api_interval,
+        update_interval_minutes,
         track_followed=track_followed,
         entry_id=entry.entry_id,
     )
 
     # Create processor and store
     store = StateStore(hass, entry.entry_id)
-    processor = DataProcessor(spotter_coordinator, flash_coordinator, store, news_days)
+    processor = DataProcessor(spotter_coordinator, flash_coordinator, store, news_days, new_city_days)
     processor.set_city_names(cities)
 
     # Initialize processor (load previous snapshot)

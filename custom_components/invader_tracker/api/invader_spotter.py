@@ -5,7 +5,7 @@ import asyncio
 import html
 import logging
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import aiohttp
 from bs4 import BeautifulSoup
@@ -528,8 +528,6 @@ class InvaderSpotterScraper:
             List of NewsEvent objects
 
         """
-        from datetime import timedelta
-
         soup = BeautifulSoup(html_content, "html.parser")
         events: list[NewsEvent] = []
         cutoff_date = datetime.now().date() - timedelta(days=days)

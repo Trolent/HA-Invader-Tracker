@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from .models import (
@@ -14,6 +14,7 @@ from .models import (
     NewsEventType,
     StateSnapshot,
 )
+
 
 if TYPE_CHECKING:
     from .coordinator import FlashInvaderCoordinator, InvaderSpotterCoordinator
@@ -31,6 +32,7 @@ class DataProcessor:
         flash_coordinator: FlashInvaderCoordinator,
         store: StateStore,
         news_days: int = 30,
+        new_city_days: int = 7,
     ) -> None:
         """Initialize the processor.
 
@@ -49,6 +51,7 @@ class DataProcessor:
         # Cached news events (refreshed by coordinator)
         self._news_events: list[NewsEvent] = []
         self._news_days: int = news_days
+        self._new_city_days: int = new_city_days
 
     async def async_initialize(self) -> None:
         """Load previous snapshot from storage and fetch news."""
@@ -250,17 +253,84 @@ class DataProcessor:
                     inv_id, previous_inv_status.value, status.value
                 )
 
+        # Update city_first_seen: preserve existing entries, add newly discovered cities
+        city_first_seen: dict[str, datetime] = {}
+        if self._previous_snapshot:
+            city_first_seen = dict(self._previous_snapshot.city_first_seen)
+
+        for code in self._spotter.all_known_cities:
+            if code not in city_first_seen:
+                city_first_seen[code] = now
+                _LOGGER.info("New city discovered in awazleon: %s", code)
+
         snapshot = StateSnapshot(
             timestamp=now,
             invader_ids_by_city=current_ids_by_city,
             status_by_invader=current_status,
             first_seen_date=first_seen,
             previous_status=previous_status,
+            city_first_seen=city_first_seen,
         )
 
         await self._store.async_save_snapshot(snapshot)
         self._previous_snapshot = snapshot
         _LOGGER.debug("Saved snapshot with %d invaders tracked", len(current_status))
+
+    def detect_new_cities(self) -> list[tuple[str, str, datetime]]:
+        """Return cities first seen within the configured new_city_days window.
+
+        Returns:
+            List of (city_code, city_name, first_seen_datetime) tuples,
+            most recently detected first.
+
+        """
+        if not self._previous_snapshot:
+            return []
+
+        cutoff = datetime.now() - timedelta(days=self._new_city_days)
+        results: list[tuple[str, str, datetime]] = []
+
+        for code, first_seen in self._previous_snapshot.city_first_seen.items():
+            if first_seen >= cutoff:
+                name = self._spotter.all_known_cities.get(code, code)
+                results.append((code, name, first_seen))
+
+        results.sort(key=lambda x: x[2], reverse=True)
+        return results
+
+    def compute_world_stats(self) -> CityStats:
+        """Compute aggregated statistics across all tracked cities.
+
+        Returns:
+            CityStats whose counters sum all cities. city is a placeholder.
+
+        """
+        all_cities = self.get_all_tracked_cities()
+
+        total_invaders: list[Invader] = []
+        total_flashed: list = []
+        total_new: list[Invader] = []
+        total_reactivated: list[Invader] = []
+        total_news: list[NewsEvent] = []
+
+        for city_code in all_cities:
+            stats = self.compute_city_stats(city_code)
+            total_invaders.extend(stats.all_invaders)
+            total_flashed.extend(stats.flashed_invaders)
+            total_new.extend(stats.new_invaders)
+            total_reactivated.extend(stats.reactivated_invaders)
+            total_news.extend(stats.news_events)
+
+        world_city = City(code="WORLD", name="World", total_invaders=len(total_invaders))
+
+        return CityStats(
+            city=world_city,
+            all_invaders=total_invaders,
+            flashed_invaders=total_flashed,
+            new_invaders=total_new,
+            reactivated_invaders=total_reactivated,
+            news_events=total_news,
+        )
 
     def get_all_tracked_cities(self) -> list[str]:
         """Get list of all tracked city codes."""

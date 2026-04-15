@@ -22,6 +22,7 @@ from .models import FlashedInvader, FollowedPlayer, Invader, NewsEvent, PlayerPr
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
+    from .api.awazleon import AwazleonClient
     from .api.flash_invader import FlashInvaderAPI
     from .api.invader_spotter import InvaderSpotterScraper
 
@@ -31,43 +32,53 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]]):
-    """Coordinator for invader-spotter.art data with smart caching."""
+    """Coordinator for invader data (awazleon) + news (invader-spotter)."""
 
     def __init__(
         self,
         hass: HomeAssistant,
+        awazleon: AwazleonClient,
         scraper: InvaderSpotterScraper,
         cities: dict[str, str],
-        update_interval_hours: int,
+        update_interval_minutes: int,
     ) -> None:
         """Initialize the coordinator.
 
         Args:
             hass: Home Assistant instance
-            scraper: Invader Spotter scraper
+            awazleon: Awazleon REST API client (invader data)
+            scraper: Invader Spotter scraper (news only)
             cities: Dict mapping city codes to names
-            update_interval_hours: Hours between updates
+            update_interval_minutes: Minutes between updates
 
         """
         super().__init__(
             hass,
             _LOGGER,
             name=COORDINATOR_SPOTTER,
-            update_interval=timedelta(hours=update_interval_hours),
+            update_interval=timedelta(minutes=update_interval_minutes),
         )
+        self._awazleon = awazleon
         self._scraper = scraper
         self._cities = cities
-        self._update_interval_hours = update_interval_hours
+        self._update_interval_minutes = update_interval_minutes
         # Cache: city_code -> (timestamp, list[Invader])
         self._city_cache: dict[str, tuple[datetime, list[Invader]]] = {}
         # News events cache: (timestamp, list[NewsEvent])
         self._news_cache: tuple[datetime, list[NewsEvent]] | None = None
         self._news_cache_hours: int = 6  # Cache news for 6 hours
+        # All cities known in awazleon (updated each refresh, used for new-city detection)
+        self._all_known_cities: dict[str, str] = {}  # code -> name
 
     @property
     def cities(self) -> dict[str, str]:
         """Get tracked cities."""
         return self._cities
+
+    @property
+    def all_known_cities(self) -> dict[str, str]:
+        """Get all cities known in awazleon (code -> name)."""
+        return self._all_known_cities
 
     def update_cities(self, cities: dict[str, str]) -> None:
         """Update the list of tracked cities.
@@ -107,13 +118,20 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
 
         cached_time, _ = self._city_cache[city_code]
         age = datetime.now() - cached_time
-        max_age = timedelta(hours=self._update_interval_hours)
+        max_age = timedelta(minutes=self._update_interval_minutes)
 
         return age < max_age
 
     async def _async_update_data(self) -> dict[str, list[Invader]]:
-        """Fetch data from invader-spotter, using cache for unchanged cities."""
-        _LOGGER.debug("Starting invader-spotter update for %d cities", len(self._cities))
+        """Fetch invader data from awazleon, using cache for unchanged cities."""
+        _LOGGER.debug("Starting awazleon update for %d cities", len(self._cities))
+
+        # Refresh the global city list for new-city detection
+        try:
+            cities_list = await self._awazleon.get_cities()
+            self._all_known_cities = {c.code: c.name for c in cities_list}
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Failed to fetch awazleon city list: %s", err)
 
         result: dict[str, list[Invader]] = {}
         failures: list[str] = []
@@ -137,22 +155,22 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
                     raise
 
             try:
-                invaders = await self._scraper.get_city_invaders(city_code, city_name)
+                invaders = await self._awazleon.get_city_invaders(city_code, city_name)
                 result[city_code] = invaders
-                
+
                 # Update cache
                 self._city_cache[city_code] = (datetime.now(), invaders)
                 scraped_count += 1
-                
+
                 _LOGGER.debug(
-                    "Scraped %s: %d invaders (%d flashable)",
+                    "Fetched %s from awazleon: %d invaders (%d flashable)",
                     city_code,
                     len(invaders),
                     sum(1 for inv in invaders if inv.is_flashable),
                 )
 
             except (InvaderSpotterConnectionError, ParseError) as err:
-                _LOGGER.warning("Failed to scrape %s: %s", city_code, err)
+                _LOGGER.warning("Failed to fetch %s from awazleon: %s", city_code, err)
                 failures.append(city_code)
 
                 # Use cached data if available (even if expired)
@@ -173,12 +191,12 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
         total_invaders = sum(len(inv) for inv in result.values())
         if failures:
             _LOGGER.warning(
-                "Partial update: %d scraped, %d cached, %d failed (%d total invaders)",
+                "Awazleon partial update: %d fetched, %d cached, %d failed (%d total invaders)",
                 scraped_count, cached_count, len(failures), total_invaders,
             )
         else:
             _LOGGER.info(
-                "Update complete: %d scraped, %d cached (%d total invaders)",
+                "Awazleon update complete: %d fetched, %d cached (%d total invaders)",
                 scraped_count, cached_count, total_invaders,
             )
 
@@ -258,21 +276,21 @@ class FlashInvaderCoordinator(DataUpdateCoordinator[list[FlashedInvader]]):
         self,
         hass: HomeAssistant,
         api: FlashInvaderAPI,
-        update_interval_hours: int,
+        update_interval_minutes: int,
     ) -> None:
         """Initialize the coordinator.
 
         Args:
             hass: Home Assistant instance
             api: Flash Invader API client
-            update_interval_hours: Hours between updates
+            update_interval_minutes: Minutes between updates
 
         """
         super().__init__(
             hass,
             _LOGGER,
             name=COORDINATOR_FLASH,
-            update_interval=timedelta(hours=update_interval_hours),
+            update_interval=timedelta(minutes=update_interval_minutes),
         )
         self._api = api
         self._flashed_by_city: dict[str, list[FlashedInvader]] = {}
@@ -349,7 +367,7 @@ class FlashInvaderProfileCoordinator(DataUpdateCoordinator[ProfileData]):
         self,
         hass: HomeAssistant,
         api: FlashInvaderAPI,
-        update_interval_hours: int,
+        update_interval_minutes: int,
         track_followed: bool = True,
         entry_id: str = "",
     ) -> None:
@@ -358,7 +376,7 @@ class FlashInvaderProfileCoordinator(DataUpdateCoordinator[ProfileData]):
             hass,
             _LOGGER,
             name=COORDINATOR_PROFILE,
-            update_interval=timedelta(hours=update_interval_hours),
+            update_interval=timedelta(minutes=update_interval_minutes),
         )
         self._api = api
         self._track_followed = track_followed

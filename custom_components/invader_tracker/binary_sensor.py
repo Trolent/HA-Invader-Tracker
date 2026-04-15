@@ -26,6 +26,8 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Invader Tracker binary sensors from config entry."""
+    from .binary_sensor_world import async_setup_world_binary_entities
+
     runtime_data = hass.data[DOMAIN][entry.entry_id]
 
     spotter_coordinator: InvaderSpotterCoordinator = runtime_data["spotter_coordinator"]
@@ -43,6 +45,9 @@ async def async_setup_entry(
         )
 
     async_add_entities(entities)
+
+    # Set up world aggregate binary entities
+    await async_setup_world_binary_entities(hass, entry, async_add_entities)
 
 
 class InvaderHasNewBinarySensor(CoordinatorEntity, BinarySensorEntity):
@@ -88,7 +93,6 @@ class InvaderHasNewBinarySensor(CoordinatorEntity, BinarySensorEntity):
             name=f"City - {self._city_name}",
             manufacturer="Space Invader",
             model="City Tracker",
-            sw_version="1.0",
         )
 
     @property

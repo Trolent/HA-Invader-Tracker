@@ -1,6 +1,7 @@
 """Pytest fixtures for Invader Tracker tests."""
 from __future__ import annotations
 
+from datetime import date, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,8 +13,6 @@ from custom_components.invader_tracker.models import (
     Invader,
     InvaderStatus,
 )
-
-from datetime import datetime, date
 
 
 @pytest.fixture
@@ -27,17 +26,6 @@ def config_entry() -> ConfigEntry:
     entry.unique_id = "test_unique_id"
     entry.version = 1
     return entry
-
-
-@pytest.fixture
-def mock_config_entry_data() -> dict:
-    """Create mock config entry data."""
-    return {
-        "uid": "TEST-UID-1234-5678-9ABC-DEF012345678",
-        "cities": {"PA": "Paris", "LYN": "Lyon"},
-        "scrape_interval": 24,
-        "api_interval": 1,
-    }
 
 
 @pytest.fixture
@@ -135,60 +123,3 @@ def mock_invaders_paris() -> list[Invader]:
             install_date=date(2000, 1, 4),
         ),
     ]
-
-
-@pytest.fixture
-def mock_invader_spotter_cities_html() -> str:
-    """Create mock HTML for cities page."""
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head><title>Villes</title></head>
-    <body>
-    <h1>Liste des villes</h1>
-    <ul>
-        <li><a href="ville.php?ville=PA">Paris</a></li>
-        <li><a href="ville.php?ville=LYN">Lyon</a></li>
-        <li><a href="ville.php?ville=MRS">Marseille</a></li>
-    </ul>
-    </body>
-    </html>
-    """
-
-
-@pytest.fixture
-def mock_invader_spotter_paris_html() -> str:
-    """Create mock HTML for Paris invaders page."""
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head><title>Paris</title></head>
-    <body>
-    <h1>Invaders à Paris</h1>
-    <div class="invader">
-        <a href="invader.php?id=PA_001">PA_001</a> [10 pts]<br>
-        Date de pose : 01/01/2000<br>
-        Dernier état connu : OK<br>
-        Date et source : janvier 2024 (spott)
-    </div>
-    <div class="invader">
-        <a href="invader.php?id=PA_002">PA_002</a> [20 pts]<br>
-        Date de pose : 02/01/2000<br>
-        Dernier état connu : OK<br>
-        Date et source : février 2024 (user)
-    </div>
-    <div class="invader">
-        <a href="invader.php?id=PA_003">PA_003</a> [30 pts]<br>
-        Date de pose : 03/01/2000<br>
-        Dernier état connu : OK<br>
-        Date et source : mars 2024 (spott)
-    </div>
-    <div class="invader">
-        <a href="invader.php?id=PA_004">PA_004</a> [40 pts]<br>
-        Date de pose : 04/01/2000<br>
-        Dernier état connu : Détruit<br>
-        Date et source : avril 2024 (spott)
-    </div>
-    </body>
-    </html>
-    """

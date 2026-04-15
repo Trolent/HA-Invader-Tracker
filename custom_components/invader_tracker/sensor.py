@@ -36,6 +36,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up Invader Tracker sensors from config entry."""
     from .sensor_profile import async_setup_profile_entities
+    from .sensor_world import async_setup_world_entities
 
     runtime_data = hass.data[DOMAIN][entry.entry_id]
 
@@ -46,6 +47,9 @@ async def async_setup_entry(
 
     # Set up profile entities (always, since UID is required)
     await async_setup_profile_entities(hass, entry, async_add_entities)
+
+    # Set up world aggregate entities
+    await async_setup_world_entities(hass, entry, async_add_entities)
 
     entities: list[SensorEntity] = []
 
@@ -120,7 +124,6 @@ class InvaderBaseSensor(CoordinatorEntity, SensorEntity):
             name=f"City - {self._city_name}",
             manufacturer="Space Invader",
             model="City Tracker",
-            sw_version="1.0",
         )
 
     @property
@@ -230,7 +233,6 @@ class InvaderUnflashedSensor(InvaderBaseSensor):
         return stats.unflashed_count
 
 
-
 class InvaderUnflashedGoneSensor(InvaderBaseSensor):
     """Sensor for unflashed and no longer available invaders."""
 
@@ -258,7 +260,6 @@ class InvaderUnflashedGoneSensor(InvaderBaseSensor):
             return None
         stats = self._processor.compute_city_stats(self._city_code)
         return stats.unflashed_gone_count
-
 
 
 class InvaderNewSensor(InvaderBaseSensor):
@@ -333,7 +334,6 @@ class InvaderToFlashSensor(CoordinatorEntity, SensorEntity):
             name=f"City - {self._city_name}",
             manufacturer="Space Invader",
             model="City Tracker",
-            sw_version="1.0",
         )
 
     @property

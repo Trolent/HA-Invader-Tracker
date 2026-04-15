@@ -5,6 +5,33 @@ All notable changes to the Invader Tracker integration will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-04-15
+
+### Added
+
+- **Device "World"** — device agrégé visible dans HA regroupant toutes les stats sur l'ensemble des villes trackées : Total Invaders, Flashed, Unflashed (Available), Unflashed (Gone), New & Reactivated, Invaders To Flash, Has New Invaders.
+- **Capteur "New City Invaded"** (device World) — affiche le nom de la dernière ville nouvellement envahie par Space Invader dans la fenêtre configurable (défaut 7 jours), sinon `None`. Attributs : `detected_at` (datetime de première détection), `also_new` (autres villes détectées en même temps). Persisté dans le StateStore via `city_first_seen`.
+- Option **"New city detection window"** dans les réglages de l'intégration (3 jours, 1 semaine, 2 semaines, 1 mois).
+
+### Changed
+
+- **Intervalle de refresh unifié** — `CONF_SCRAPE_INTERVAL` et `CONF_API_INTERVAL` (en heures) sont remplacés par `CONF_UPDATE_INTERVAL` (en minutes) commun à toutes les sources. Les entrées existantes sont migrées automatiquement. Valeurs prédéfinies : 15 min, 30 min, 1h, 2h, 6h, 12h, 1j, 1 semaine, 1 mois — plus option "Custom…" avec saisie libre (min. 15 min).
+- Imports locaux (`json`, `re`, `timedelta`) déplacés au niveau module dans tous les fichiers.
+- Suppression de `sw_version="1.0"` hardcodé dans les `DeviceInfo`.
+- `api/__init__.py` exporte maintenant `AwazleonClient`.
+- Nettoyage des fixtures de test obsolètes dans `conftest.py`.
+
+## [2.4.0] - 2026-04-15
+
+### Changed
+
+- **Remplacement du scraping invader-spotter par l'API awazleon.space** — les données invaders (statut, points, date d'installation) sont désormais récupérées via l'API REST de [awazleon.space](https://www.awazleon.space) au lieu de scraper le HTML d'invader-spotter.art. Un appel HTTP par ville, pas de BeautifulSoup, plus fiable.
+- **Invader-spotter.art conservé uniquement pour `news.php`** — la détection des nouveaux invaders et réactivations reste assurée par l'API news d'invader-spotter (seule source disponible pour les événements new/reactivated).
+- Nouveau client `AwazleonClient` (`api/awazleon.py`) avec mapping des codes d'état : `A` → OK, `DG` → DAMAGED, `D`/`DD` → DESTROYED, `H` → NOT_VISIBLE.
+- `InvaderSpotterCoordinator` utilise désormais `AwazleonClient` pour les invaders et `InvaderSpotterScraper` uniquement pour les news.
+- **Intervalle de refresh unifié** — `CONF_SCRAPE_INTERVAL` et `CONF_API_INTERVAL` (en heures) sont remplacés par `CONF_UPDATE_INTERVAL` (en minutes) commun à toutes les sources. Les entrées existantes sont migrées automatiquement (min des deux valeurs legacy converti en minutes).
+- Choix de l'intervalle avec valeurs prédéfinies (15 min, 30 min, 1h, 2h, 6h, 12h, 1j, 1 semaine, 1 mois) + option "Custom…" avec saisie libre (minimum 15 min).
+
 ## [2.3.0] - 2026-04-14
 
 ### Added
