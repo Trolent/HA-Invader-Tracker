@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import re
 from datetime import date, datetime
 
 import aiohttp
@@ -231,9 +233,6 @@ class FlashInvaderAPI:
 
     def _parse_followed_players(self, html_content: str) -> list[FollowedPlayer]:
         """Extract followed_players from the JSON embedded in the highscore page."""
-        import json
-        import re
-
         match = re.search(r"fillTalbleWithData\(JSON\.parse\('(.+?)'\)\)", html_content, re.DOTALL)
         if not match:
             raise ParseError("Could not find player data in highscore page")

@@ -55,6 +55,10 @@ class StateStore:
                 inv_id: status.value
                 for inv_id, status in snapshot.previous_status.items()
             },
+            "city_first_seen": {
+                city: dt.isoformat()
+                for city, dt in snapshot.city_first_seen.items()
+            },
         }
 
         await self._store.async_save(data)
@@ -93,6 +97,10 @@ class StateStore:
                 previous_status={
                     inv_id: InvaderStatus(status)
                     for inv_id, status in data.get("previous_status", {}).items()
+                },
+                city_first_seen={
+                    city: datetime.fromisoformat(dt)
+                    for city, dt in data.get("city_first_seen", {}).items()
                 },
             )
             _LOGGER.debug(

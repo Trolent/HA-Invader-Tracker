@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from enum import Enum
 
 
@@ -192,6 +192,8 @@ class StateSnapshot:
     first_seen_date: dict[str, datetime] = field(default_factory=dict)
     # Track status history for reactivation detection
     previous_status: dict[str, InvaderStatus] = field(default_factory=dict)
+    # Track when each city was first seen in awazleon (for new city detection)
+    city_first_seen: dict[str, datetime] = field(default_factory=dict)
 
     def get_new_invaders(self, city_code: str, current_ids: set[str]) -> set[str]:
         """Return IDs that are in current but not in snapshot."""
@@ -202,7 +204,6 @@ class StateSnapshot:
         self, current_invaders: list[Invader], days: int = 30
     ) -> list[Invader]:
         """Return invaders first seen within the last N days."""
-        from datetime import timedelta
         cutoff = datetime.now() - timedelta(days=days)
         recently_added = []
         for inv in current_invaders:

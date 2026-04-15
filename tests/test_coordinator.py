@@ -52,12 +52,19 @@ def mock_hass() -> MagicMock:
 
 
 @pytest.fixture
-def mock_scraper() -> MagicMock:
-    """Create a mock InvaderSpotterScraper."""
-    scraper = MagicMock()
-    scraper.get_city_invaders = AsyncMock(return_value=[
+def mock_awazleon() -> MagicMock:
+    """Create a mock AwazleonClient."""
+    client = MagicMock()
+    client.get_city_invaders = AsyncMock(return_value=[
         Invader(id="PA_001", city_code="PA", city_name="Paris", points=10, status=InvaderStatus.OK),
     ])
+    return client
+
+
+@pytest.fixture
+def mock_scraper() -> MagicMock:
+    """Create a mock InvaderSpotterScraper (news only)."""
+    scraper = MagicMock()
     scraper.get_news = AsyncMock(return_value=[])
     return scraper
 
@@ -80,10 +87,10 @@ def mock_flash_api() -> MagicMock:
 class TestInvaderSpotterCoordinator:
     """Tests for InvaderSpotterCoordinator."""
 
-    def test_update_cities(self, mock_hass, mock_scraper) -> None:
+    def test_update_cities(self, mock_hass, mock_awazleon, mock_scraper) -> None:
         """Test updating tracked cities."""
         coordinator = InvaderSpotterCoordinator(
-            mock_hass, mock_scraper, {"PA": "Paris", "LYN": "Lyon"}, 24
+            mock_hass, mock_awazleon, mock_scraper, {"PA": "Paris", "LYN": "Lyon"}, 60
         )
 
         # Add cache entry for Lyon
@@ -96,10 +103,10 @@ class TestInvaderSpotterCoordinator:
         # LYN cache should be cleaned up
         assert "LYN" not in coordinator._city_cache
 
-    def test_is_cache_valid(self, mock_hass, mock_scraper) -> None:
+    def test_is_cache_valid(self, mock_hass, mock_awazleon, mock_scraper) -> None:
         """Test cache validity check."""
         coordinator = InvaderSpotterCoordinator(
-            mock_hass, mock_scraper, {"PA": "Paris"}, 24
+            mock_hass, mock_awazleon, mock_scraper, {"PA": "Paris"}, 60
         )
 
         # No cache
@@ -109,15 +116,17 @@ class TestInvaderSpotterCoordinator:
         coordinator._city_cache["PA"] = (datetime.now(), [])
         assert coordinator._is_cache_valid("PA") is True
 
-        # Expired cache (25 hours old)
-        coordinator._city_cache["PA"] = (datetime.now() - timedelta(hours=25), [])
+        # Expired cache (2 hours old, interval is 60 min)
+        coordinator._city_cache["PA"] = (datetime.now() - timedelta(hours=2), [])
         assert coordinator._is_cache_valid("PA") is False
 
     @pytest.mark.asyncio
-    async def test_async_update_data_scrapes_uncached(self, mock_hass, mock_scraper) -> None:
-        """Test that uncached cities are scraped."""
+    async def test_async_update_data_fetches_uncached(
+        self, mock_hass, mock_awazleon, mock_scraper
+    ) -> None:
+        """Test that uncached cities are fetched from awazleon."""
         coordinator = InvaderSpotterCoordinator(
-            mock_hass, mock_scraper, {"PA": "Paris"}, 24
+            mock_hass, mock_awazleon, mock_scraper, {"PA": "Paris"}, 60
         )
 
         with patch("custom_components.invader_tracker.coordinator.asyncio.sleep"):
@@ -125,13 +134,15 @@ class TestInvaderSpotterCoordinator:
 
         assert "PA" in result
         assert len(result["PA"]) == 1
-        mock_scraper.get_city_invaders.assert_called_once_with("PA", "Paris")
+        mock_awazleon.get_city_invaders.assert_called_once_with("PA", "Paris")
 
     @pytest.mark.asyncio
-    async def test_async_update_data_uses_cache(self, mock_hass, mock_scraper) -> None:
-        """Test that cached cities are not re-scraped."""
+    async def test_async_update_data_uses_cache(
+        self, mock_hass, mock_awazleon, mock_scraper
+    ) -> None:
+        """Test that cached cities are not re-fetched."""
         coordinator = InvaderSpotterCoordinator(
-            mock_hass, mock_scraper, {"PA": "Paris"}, 24
+            mock_hass, mock_awazleon, mock_scraper, {"PA": "Paris"}, 60
         )
         cached_invaders = [
             Invader(id="PA_CACHED", city_code="PA", city_name="Paris",
@@ -142,24 +153,24 @@ class TestInvaderSpotterCoordinator:
         result = await coordinator._async_update_data()
 
         assert result["PA"] == cached_invaders
-        mock_scraper.get_city_invaders.assert_not_called()
+        mock_awazleon.get_city_invaders.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_async_update_data_fallback_to_expired_cache(
-        self, mock_hass, mock_scraper
+        self, mock_hass, mock_awazleon, mock_scraper
     ) -> None:
-        """Test fallback to expired cache on scrape failure."""
+        """Test fallback to expired cache on fetch failure."""
         coordinator = InvaderSpotterCoordinator(
-            mock_hass, mock_scraper, {"PA": "Paris"}, 24
+            mock_hass, mock_awazleon, mock_scraper, {"PA": "Paris"}, 60
         )
         cached_invaders = [
             Invader(id="PA_OLD", city_code="PA", city_name="Paris",
                     points=10, status=InvaderStatus.OK),
         ]
-        # Expired cache
-        coordinator._city_cache["PA"] = (datetime.now() - timedelta(hours=48), cached_invaders)
+        # Expired cache (2 hours old, interval is 60 min)
+        coordinator._city_cache["PA"] = (datetime.now() - timedelta(hours=2), cached_invaders)
 
-        mock_scraper.get_city_invaders = AsyncMock(
+        mock_awazleon.get_city_invaders = AsyncMock(
             side_effect=InvaderSpotterConnectionError("Timeout")
         )
 
@@ -170,12 +181,14 @@ class TestInvaderSpotterCoordinator:
         assert result["PA"] == cached_invaders
 
     @pytest.mark.asyncio
-    async def test_async_update_data_all_fail_raises(self, mock_hass, mock_scraper) -> None:
+    async def test_async_update_data_all_fail_raises(
+        self, mock_hass, mock_awazleon, mock_scraper
+    ) -> None:
         """Test that UpdateFailed is raised when all cities fail and no cache."""
         coordinator = InvaderSpotterCoordinator(
-            mock_hass, mock_scraper, {"PA": "Paris"}, 24
+            mock_hass, mock_awazleon, mock_scraper, {"PA": "Paris"}, 60
         )
-        mock_scraper.get_city_invaders = AsyncMock(
+        mock_awazleon.get_city_invaders = AsyncMock(
             side_effect=InvaderSpotterConnectionError("Timeout")
         )
 
@@ -183,10 +196,10 @@ class TestInvaderSpotterCoordinator:
             with pytest.raises(UpdateFailed):
                 await coordinator._async_update_data()
 
-    def test_get_news_for_city(self, mock_hass, mock_scraper) -> None:
+    def test_get_news_for_city(self, mock_hass, mock_awazleon, mock_scraper) -> None:
         """Test filtering news events by city."""
         coordinator = InvaderSpotterCoordinator(
-            mock_hass, mock_scraper, {"PA": "Paris"}, 24
+            mock_hass, mock_awazleon, mock_scraper, {"PA": "Paris"}, 60
         )
         events = [
             NewsEvent(event_type=NewsEventType.ADDED, invader_id="PA_001",
@@ -200,10 +213,10 @@ class TestInvaderSpotterCoordinator:
         assert result[0].invader_id == "PA_001"
 
     @pytest.mark.asyncio
-    async def test_get_news_events_caching(self, mock_hass, mock_scraper) -> None:
+    async def test_get_news_events_caching(self, mock_hass, mock_awazleon, mock_scraper) -> None:
         """Test that news events are cached."""
         coordinator = InvaderSpotterCoordinator(
-            mock_hass, mock_scraper, {"PA": "Paris"}, 24
+            mock_hass, mock_awazleon, mock_scraper, {"PA": "Paris"}, 60
         )
         mock_scraper.get_news = AsyncMock(return_value=[
             NewsEvent(event_type=NewsEventType.ADDED, invader_id="PA_001",
@@ -226,7 +239,7 @@ class TestFlashInvaderCoordinator:
 
     def test_get_flashed_for_city(self, mock_hass, mock_flash_api) -> None:
         """Test getting flashed invaders by city."""
-        coordinator = FlashInvaderCoordinator(mock_hass, mock_flash_api, 1)
+        coordinator = FlashInvaderCoordinator(mock_hass, mock_flash_api, 60)
 
         # Simulate data loaded
         invaders = [
@@ -251,7 +264,7 @@ class TestFlashInvaderCoordinator:
 
     def test_update_city_grouping(self, mock_hass, mock_flash_api) -> None:
         """Test city grouping logic."""
-        coordinator = FlashInvaderCoordinator(mock_hass, mock_flash_api, 1)
+        coordinator = FlashInvaderCoordinator(mock_hass, mock_flash_api, 60)
 
         invaders = [
             FlashedInvader(id="PA_001", name="PA_001", city_id=1, points=10,
@@ -269,7 +282,7 @@ class TestFlashInvaderCoordinator:
     @pytest.mark.asyncio
     async def test_async_update_data_success(self, mock_hass, mock_flash_api) -> None:
         """Test successful data fetch."""
-        coordinator = FlashInvaderCoordinator(mock_hass, mock_flash_api, 1)
+        coordinator = FlashInvaderCoordinator(mock_hass, mock_flash_api, 60)
 
         result = await coordinator._async_update_data()
 
@@ -282,7 +295,7 @@ class TestFlashInvaderCoordinator:
         """Test that auth errors trigger ConfigEntryAuthFailed."""
         from homeassistant.exceptions import ConfigEntryAuthFailed
 
-        coordinator = FlashInvaderCoordinator(mock_hass, mock_flash_api, 1)
+        coordinator = FlashInvaderCoordinator(mock_hass, mock_flash_api, 60)
         mock_flash_api.get_flashed_invaders = AsyncMock(
             side_effect=AuthenticationError("Invalid UID")
         )
@@ -293,7 +306,7 @@ class TestFlashInvaderCoordinator:
     @pytest.mark.asyncio
     async def test_async_update_data_rate_limit(self, mock_hass, mock_flash_api) -> None:
         """Test that rate limit errors raise UpdateFailed."""
-        coordinator = FlashInvaderCoordinator(mock_hass, mock_flash_api, 1)
+        coordinator = FlashInvaderCoordinator(mock_hass, mock_flash_api, 60)
         mock_flash_api.get_flashed_invaders = AsyncMock(
             side_effect=RateLimitError(60)
         )
@@ -304,7 +317,7 @@ class TestFlashInvaderCoordinator:
     @pytest.mark.asyncio
     async def test_async_update_data_connection_error(self, mock_hass, mock_flash_api) -> None:
         """Test that connection errors raise UpdateFailed."""
-        coordinator = FlashInvaderCoordinator(mock_hass, mock_flash_api, 1)
+        coordinator = FlashInvaderCoordinator(mock_hass, mock_flash_api, 60)
         mock_flash_api.get_flashed_invaders = AsyncMock(
             side_effect=InvaderTrackerConnectionError("Timeout")
         )
@@ -315,7 +328,7 @@ class TestFlashInvaderCoordinator:
     @pytest.mark.asyncio
     async def test_async_update_data_parse_error(self, mock_hass, mock_flash_api) -> None:
         """Test that parse errors raise UpdateFailed."""
-        coordinator = FlashInvaderCoordinator(mock_hass, mock_flash_api, 1)
+        coordinator = FlashInvaderCoordinator(mock_hass, mock_flash_api, 60)
         mock_flash_api.get_flashed_invaders = AsyncMock(
             side_effect=ParseError("Bad response")
         )
