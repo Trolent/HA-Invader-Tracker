@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.components.selector import SelectSelector, SelectSelectorConfig, SelectSelectorMode
+from homeassistant.helpers.selector import SelectOptionDict, SelectSelector, SelectSelectorConfig, SelectSelectorMode
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -78,7 +78,7 @@ NEW_CITY_DAYS_OPTIONS: dict[str, str] = {
 def _select(options: dict[str, str], default: str) -> SelectSelector:
     """Build a dropdown SelectSelector from a {value: label} dict."""
     return SelectSelector(SelectSelectorConfig(
-        options=[{"value": v, "label": label} for v, label in options.items()],
+        options=[SelectOptionDict(value=v, label=label) for v, label in options.items()],
         mode=SelectSelectorMode.DROPDOWN,
     ))
 
