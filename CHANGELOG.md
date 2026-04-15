@@ -5,6 +5,16 @@ All notable changes to the Invader Tracker integration will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.1] - 2026-04-15
+
+### Fixed
+
+- **Total invaders toujours à ~3** — la structure de réponse awazleon était mal lue : les invaders sont sous `data["invaders"]`, pas à la racine
+- **Compteurs Flashed / Unflashed / Gone incorrects** — awazleon padde les IDs avec des zéros (`PA_01`) contrairement à Flash Invader (`PA_1`) ; les IDs sont maintenant normalisés pour que le matching inter-sources fonctionne
+- **Pas de liste de villes dans le config/options flow** — `/cities/info` imbrique les villes sous `data["cities"]["details"]`, pas `data["cities"]` directement
+- **Dropdowns intervalle et options affichant des clés brutes ou des radio buttons** — remplacement de `vol.In` par `SelectSelector` (mode DROPDOWN) pour un rendu correct dans l'UI HA
+- **Traductions** — noms de champs mis à jour (`update_interval`, `new_city_days`), ajout de l'étape `custom_interval`, correction des références awazleon.space
+
 ## [2.5.0] - 2026-04-15
 
 ### Added
