@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 import voluptuous as vol
+from homeassistant.components.selector import SelectSelector, SelectSelectorConfig, SelectSelectorMode
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -39,46 +40,58 @@ UID_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Predefined interval options: display label -> minutes
-# Predefined interval options: label -> minutes (int)
-# Using string labels as keys so vol.In displays them correctly in HA UI
-INTERVAL_OPTIONS: dict[str, int] = {
-    "Every 15 minutes": 15,
-    "Every 30 minutes": 30,
-    "Every hour": 60,
-    "Every 2 hours": 120,
-    "Every 6 hours": 360,
-    "Every 12 hours": 720,
-    "Daily": 1440,
-    "Weekly": 10080,
-    "Monthly": 43200,
+# Predefined interval options: minutes (stored as str) -> display label
+# SelectSelector requires string values; we convert to int on save.
+INTERVAL_OPTIONS: dict[str, str] = {
+    "15": "Every 15 minutes",
+    "30": "Every 30 minutes",
+    "60": "Every hour",
+    "120": "Every 2 hours",
+    "360": "Every 6 hours",
+    "720": "Every 12 hours",
+    "1440": "Daily",
+    "10080": "Weekly",
+    "43200": "Monthly",
 }
 
-# Reverse lookup: minutes -> label (for setting defaults)
-_INTERVAL_MINUTES_TO_LABEL: dict[int, str] = {v: k for k, v in INTERVAL_OPTIONS.items()}
+# Sentinel value used to trigger the custom-interval step
+_CUSTOM_SENTINEL = "0"
 
-# Sentinel string used to trigger the custom-interval step
-_CUSTOM_SENTINEL = "Custom…"
-
-NEWS_DAYS_OPTIONS: dict[str, int] = {
-    "7 days": 7,
-    "14 days": 14,
-    "30 days": 30,
-    "60 days": 60,
-    "90 days": 90,
-    "6 months": 180,
-    "1 year": 365,
+NEWS_DAYS_OPTIONS: dict[str, str] = {
+    "7": "7 days",
+    "14": "14 days",
+    "30": "30 days",
+    "60": "60 days",
+    "90": "90 days",
+    "180": "6 months",
+    "365": "1 year",
 }
 
-NEW_CITY_DAYS_OPTIONS: dict[str, int] = {
-    "3 days": 3,
-    "1 week": 7,
-    "2 weeks": 14,
-    "1 month": 30,
+NEW_CITY_DAYS_OPTIONS: dict[str, str] = {
+    "3": "3 days",
+    "7": "1 week",
+    "14": "2 weeks",
+    "30": "1 month",
 }
 
-# Selector options: predefined labels + "Custom…" entry
-_INTERVAL_SELECTOR_OPTIONS: list[str] = [*INTERVAL_OPTIONS.keys(), _CUSTOM_SENTINEL]
+
+def _select(options: dict[str, str], default: str) -> SelectSelector:
+    """Build a dropdown SelectSelector from a {value: label} dict."""
+    return SelectSelector(SelectSelectorConfig(
+        options=[{"value": v, "label": label} for v, label in options.items()],
+        mode=SelectSelectorMode.DROPDOWN,
+    ))
+
+
+def _interval_selector() -> SelectSelector:
+    """Build the interval dropdown (predefined values + Custom…)."""
+    opts = {**INTERVAL_OPTIONS, _CUSTOM_SENTINEL: "Custom…"}
+    return _select(opts, "60")
+
+
+def _interval_default(minutes: int) -> str:
+    """Return the string value matching a stored interval (or sentinel)."""
+    return str(minutes) if str(minutes) in INTERVAL_OPTIONS else _CUSTOM_SENTINEL
 
 
 def _validate_uid(uid: str) -> bool:
@@ -86,11 +99,6 @@ def _validate_uid(uid: str) -> bool:
     if not uid:
         return False
     return bool(UID_PATTERN.match(uid.strip()))
-
-
-def _interval_default_label(minutes: int) -> str:
-    """Return the dropdown label for a given number of minutes (or 'Custom…')."""
-    return _INTERVAL_MINUTES_TO_LABEL.get(minutes, _CUSTOM_SENTINEL)
 
 
 def _custom_interval_schema(current: int) -> vol.Schema:
@@ -170,18 +178,17 @@ class InvaderTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
                 cities = {
                     code: self._cities.get(code, code) for code in selected_cities
                 }
-                chosen_label = user_input.get(CONF_UPDATE_INTERVAL, _CUSTOM_SENTINEL)
+                chosen_val = user_input.get(CONF_UPDATE_INTERVAL, _CUSTOM_SENTINEL)
 
                 self._pending_data = {
                     CONF_UID: self._uid,
                     CONF_CITIES: cities,
                 }
 
-                if chosen_label == _CUSTOM_SENTINEL:
-                    # Proceed to the custom-value step
+                if chosen_val == _CUSTOM_SENTINEL:
                     return await self.async_step_custom_interval()
 
-                self._pending_data[CONF_UPDATE_INTERVAL] = INTERVAL_OPTIONS[chosen_label]
+                self._pending_data[CONF_UPDATE_INTERVAL] = int(chosen_val)
 
                 await self.async_set_unique_id(self._uid)
                 self._abort_if_unique_id_configured()
@@ -214,8 +221,8 @@ class InvaderTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_CITIES): cv.multi_select(city_options),
                 vol.Required(
                     CONF_UPDATE_INTERVAL,
-                    default=_interval_default_label(DEFAULT_UPDATE_INTERVAL_MINUTES),
-                ): vol.In(_INTERVAL_SELECTOR_OPTIONS),
+                    default=_interval_default(DEFAULT_UPDATE_INTERVAL_MINUTES),
+                ): _interval_selector(),
             }),
             errors=errors,
         )
@@ -348,34 +355,25 @@ class InvaderTrackerOptionsFlow(OptionsFlow):
                 cities = {
                     code: self._cities.get(code, code) for code in selected_cities
                 }
-                chosen_label = user_input.get(CONF_UPDATE_INTERVAL, _CUSTOM_SENTINEL)
-                chosen_news_label = user_input.get(
-                    CONF_NEWS_DAYS,
-                    self._get_current_value(CONF_NEWS_DAYS, DEFAULT_NEWS_DAYS),
-                )
-                chosen_new_city_label = user_input.get(
-                    CONF_NEW_CITY_DAYS,
-                    self._get_current_value(CONF_NEW_CITY_DAYS, DEFAULT_NEW_CITY_DAYS),
-                )
+                chosen_val = user_input.get(CONF_UPDATE_INTERVAL, _CUSTOM_SENTINEL)
+                # news_days and new_city_days are stored as str from SelectSelector → convert to int
+                news_val = user_input.get(CONF_NEWS_DAYS, str(DEFAULT_NEWS_DAYS))
+                new_city_val = user_input.get(CONF_NEW_CITY_DAYS, str(DEFAULT_NEW_CITY_DAYS))
 
                 self._pending_options = {
                     CONF_CITIES: cities,
-                    CONF_NEWS_DAYS: NEWS_DAYS_OPTIONS.get(chosen_news_label, chosen_news_label)
-                        if isinstance(chosen_news_label, str)
-                        else chosen_news_label,
-                    CONF_NEW_CITY_DAYS: NEW_CITY_DAYS_OPTIONS.get(chosen_new_city_label, chosen_new_city_label)
-                        if isinstance(chosen_new_city_label, str)
-                        else chosen_new_city_label,
+                    CONF_NEWS_DAYS: int(news_val),
+                    CONF_NEW_CITY_DAYS: int(new_city_val),
                     CONF_TRACK_FOLLOWED: user_input.get(
                         CONF_TRACK_FOLLOWED,
                         self._get_current_value(CONF_TRACK_FOLLOWED, DEFAULT_TRACK_FOLLOWED),
                     ),
                 }
 
-                if chosen_label == _CUSTOM_SENTINEL:
+                if chosen_val == _CUSTOM_SENTINEL:
                     return await self.async_step_custom_interval()
 
-                self._pending_options[CONF_UPDATE_INTERVAL] = INTERVAL_OPTIONS[chosen_label]
+                self._pending_options[CONF_UPDATE_INTERVAL] = int(chosen_val)
                 return self.async_create_entry(title="", data=self._pending_options)
 
         # Fetch available cities from awazleon
@@ -395,10 +393,6 @@ class InvaderTrackerOptionsFlow(OptionsFlow):
         current_new_city_days = self._get_current_value(CONF_NEW_CITY_DAYS, DEFAULT_NEW_CITY_DAYS)
         city_options = dict(sorted(self._cities.items(), key=lambda x: x[1]))
 
-        # Convert stored int values back to labels for display
-        _news_days_to_label = {v: k for k, v in NEWS_DAYS_OPTIONS.items()}
-        _new_city_days_to_label = {v: k for k, v in NEW_CITY_DAYS_OPTIONS.items()}
-
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
@@ -407,16 +401,16 @@ class InvaderTrackerOptionsFlow(OptionsFlow):
                 ): cv.multi_select(city_options),
                 vol.Required(
                     CONF_UPDATE_INTERVAL,
-                    default=_interval_default_label(current_interval),
-                ): vol.In(_INTERVAL_SELECTOR_OPTIONS),
+                    default=_interval_default(current_interval),
+                ): _interval_selector(),
                 vol.Optional(
                     CONF_NEWS_DAYS,
-                    default=_news_days_to_label.get(current_news_days, "30 days"),
-                ): vol.In(list(NEWS_DAYS_OPTIONS.keys())),
+                    default=str(current_news_days),
+                ): _select(NEWS_DAYS_OPTIONS, str(DEFAULT_NEWS_DAYS)),
                 vol.Optional(
                     CONF_NEW_CITY_DAYS,
-                    default=_new_city_days_to_label.get(current_new_city_days, "1 week"),
-                ): vol.In(list(NEW_CITY_DAYS_OPTIONS.keys())),
+                    default=str(current_new_city_days),
+                ): _select(NEW_CITY_DAYS_OPTIONS, str(DEFAULT_NEW_CITY_DAYS)),
                 vol.Optional(
                     CONF_TRACK_FOLLOWED,
                     default=self._get_current_value(CONF_TRACK_FOLLOWED, DEFAULT_TRACK_FOLLOWED),
