@@ -9,13 +9,18 @@
         }
       },
       "cities": {
-        "title": "Sélectionner les villes",
-        "description": "Choisissez les villes à suivre. Vous pourrez modifier cela plus tard dans les options de l'intégration.",
+        "title": "Villes & Intervalle",
+        "description": "Choisissez les villes à suivre et la fréquence de rafraîchissement des données.",
         "data": {
           "cities": "Villes à suivre",
-          "scrape_interval": "Fréquence de mise à jour Invader-Spotter",
-          "api_interval": "Fréquence de mise à jour du statut Flash",
-          "news_days": "Période de détection nouveau/réactivé"
+          "update_interval": "Intervalle de mise à jour"
+        }
+      },
+      "custom_interval": {
+        "title": "Intervalle personnalisé",
+        "description": "Entrez un intervalle de mise à jour personnalisé en minutes (minimum 15).",
+        "data": {
+          "update_interval": "Intervalle (minutes)"
         }
       },
       "reauth_confirm": {
@@ -30,9 +35,9 @@
       "invalid_uid": "UID invalide. Veuillez vérifier et réessayer.",
       "invalid_uid_format": "L'UID doit être au format UUID (ex: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX).",
       "cannot_connect": "Impossible de se connecter aux serveurs Flash Invader. Vérifiez votre connexion internet.",
-      "cannot_connect_spotter": "Impossible de se connecter à invader-spotter.art. Le site est peut-être indisponible.",
+      "cannot_connect_spotter": "Impossible de se connecter à awazleon.space. Le site est peut-être indisponible.",
       "no_cities_selected": "Veuillez sélectionner au moins une ville à suivre.",
-      "no_cities_found": "Aucune ville trouvée sur invader-spotter.art.",
+      "no_cities_found": "Aucune ville trouvée sur awazleon.space.",
       "unknown": "Une erreur inattendue s'est produite. Veuillez réessayer."
     },
     "abort": {
@@ -44,13 +49,20 @@
     "step": {
       "init": {
         "title": "Options Invader Tracker",
-        "description": "Configurez les villes à suivre et les fréquences de mise à jour.",
+        "description": "Configurez les villes à suivre et la fréquence de rafraîchissement.",
         "data": {
           "cities": "Villes à suivre",
-          "scrape_interval": "Fréquence de mise à jour Invader-Spotter",
-          "api_interval": "Fréquence de mise à jour du statut Flash",
-          "news_days": "Période de détection nouveau/réactivé",
+          "update_interval": "Intervalle de mise à jour",
+          "news_days": "Historique des news (période de détection nouveau/réactivé)",
+          "new_city_days": "Fenêtre de détection nouvelle ville",
           "track_followed": "Suivre les joueurs suivis"
+        }
+      },
+      "custom_interval": {
+        "title": "Intervalle personnalisé",
+        "description": "Entrez un intervalle de mise à jour personnalisé en minutes (minimum 15).",
+        "data": {
+          "update_interval": "Intervalle (minutes)"
         }
       }
     },

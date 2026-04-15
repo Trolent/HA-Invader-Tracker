@@ -9,13 +9,18 @@
         }
       },
       "cities": {
-        "title": "Select Cities",
-        "description": "Choose which cities to track. You can change this later in integration options.",
+        "title": "Select Cities & Interval",
+        "description": "Choose which cities to track and how often to refresh data.",
         "data": {
           "cities": "Cities to track",
-          "scrape_interval": "Invader-Spotter update frequency",
-          "api_interval": "Flash status update frequency",
-          "news_days": "New/Reactivated detection period"
+          "update_interval": "Update interval"
+        }
+      },
+      "custom_interval": {
+        "title": "Custom Update Interval",
+        "description": "Enter a custom update interval in minutes (minimum 15).",
+        "data": {
+          "update_interval": "Interval (minutes)"
         }
       },
       "reauth_confirm": {
@@ -30,9 +35,9 @@
       "invalid_uid": "Invalid UID. Please check and try again.",
       "invalid_uid_format": "UID must be in UUID format (e.g., XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX).",
       "cannot_connect": "Cannot connect to Flash Invader servers. Check your internet connection.",
-      "cannot_connect_spotter": "Cannot connect to invader-spotter.art. The site may be down.",
+      "cannot_connect_spotter": "Cannot connect to awazleon.space. The site may be down.",
       "no_cities_selected": "Please select at least one city to track.",
-      "no_cities_found": "No cities found on invader-spotter.art.",
+      "no_cities_found": "No cities found on awazleon.space.",
       "unknown": "An unexpected error occurred. Please try again."
     },
     "abort": {
@@ -44,13 +49,20 @@
     "step": {
       "init": {
         "title": "Invader Tracker Options",
-        "description": "Configure which cities to track and update frequencies.",
+        "description": "Configure which cities to track and how often to refresh data.",
         "data": {
           "cities": "Cities to track",
-          "scrape_interval": "Invader-Spotter update frequency",
-          "api_interval": "Flash status update frequency",
-          "news_days": "New/Reactivated detection period",
+          "update_interval": "Update interval",
+          "news_days": "News history (new/reactivated detection period)",
+          "new_city_days": "New city detection window",
           "track_followed": "Track followed players"
+        }
+      },
+      "custom_interval": {
+        "title": "Custom Update Interval",
+        "description": "Enter a custom update interval in minutes (minimum 15).",
+        "data": {
+          "update_interval": "Interval (minutes)"
         }
       }
     },

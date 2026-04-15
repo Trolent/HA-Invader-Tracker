@@ -27,18 +27,27 @@ CITIES_RESPONSE = {
     "provider": "awazleon.space",
     "timestamp": "2026-04-15",
     "cities": {
-        "PA": {"name": "Paris", "country": "France", "iso": "fr", "invaders": 1568, "pts": 43510},
-        "LDN": {"name": "London", "country": "UK", "iso": "gb", "invaders": 84, "pts": 2040},
+        "number": 2,
+        "details": {
+            "PA": {"prefix": "PA", "name": "Paris", "country": "France", "iso": "fr", "invaders": 1568, "pts": 43510},
+            "LDN": {"prefix": "LDN", "name": "London", "country": "UK", "iso": "gb", "invaders": 84, "pts": 2040},
+        },
     },
 }
 
 CITY_INVADERS_RESPONSE = {
-    "PA_001": {"pts": 10, "state": "A", "invdate": "2000-01-15", "CP": "75004"},
-    "PA_002": {"pts": 20, "state": "DG", "invdate": "2001-06-01", "CP": "75001"},
-    "PA_003": {"pts": 30, "state": "D", "invdate": "1999-11-20", "CP": "75003"},
-    "PA_004": {"pts": 10, "state": "H", "invdate": "2005-03-10", "CP": "75002"},
-    "PA_005": {"pts": 50, "state": "DD", "invdate": "2002-08-22", "CP": "75005"},
-    "PA_006": {"pts": 20, "state": "UNKNOWN_CODE", "invdate": "2003-12-01", "CP": "75006"},
+    "provider": "awazleon.space",
+    "timestamp": "2026-04-15",
+    "city": "pa",
+    "invadersState": {"alive": 2, "dead": 3, "hidden": 1},
+    "invaders": {
+        "PA_01": {"pts": 10, "state": "A", "invdate": "2000-01-15", "CP": "75004"},
+        "PA_02": {"pts": 20, "state": "DG", "invdate": "2001-06-01", "CP": "75001"},
+        "PA_03": {"pts": 30, "state": "D", "invdate": "1999-11-20", "CP": "75003"},
+        "PA_04": {"pts": 10, "state": "H", "invdate": "2005-03-10", "CP": "75002"},
+        "PA_05": {"pts": 50, "state": "DD", "invdate": "2002-08-22", "CP": "75005"},
+        "PA_06": {"pts": 20, "state": "UNKNOWN_CODE", "invdate": "2003-12-01", "CP": "75006"},
+    },
 }
 
 
@@ -129,12 +138,13 @@ class TestGetCityInvaders:
         invaders = await client.get_city_invaders("PA", "Paris")
         by_id = {inv.id: inv for inv in invaders}
 
-        assert by_id["PA_001"].status == InvaderStatus.OK
-        assert by_id["PA_002"].status == InvaderStatus.DAMAGED
-        assert by_id["PA_003"].status == InvaderStatus.DESTROYED
-        assert by_id["PA_004"].status == InvaderStatus.NOT_VISIBLE
-        assert by_id["PA_005"].status == InvaderStatus.DESTROYED
-        assert by_id["PA_006"].status == InvaderStatus.UNKNOWN  # unknown code fallback
+        # IDs are normalized: PA_01 → PA_1
+        assert by_id["PA_1"].status == InvaderStatus.OK
+        assert by_id["PA_2"].status == InvaderStatus.DAMAGED
+        assert by_id["PA_3"].status == InvaderStatus.DESTROYED
+        assert by_id["PA_4"].status == InvaderStatus.NOT_VISIBLE
+        assert by_id["PA_5"].status == InvaderStatus.DESTROYED
+        assert by_id["PA_6"].status == InvaderStatus.UNKNOWN  # unknown code fallback
 
     @pytest.mark.asyncio
     async def test_install_date_parsed(self, client: AwazleonClient) -> None:
@@ -143,7 +153,7 @@ class TestGetCityInvaders:
         client._session.get = MagicMock(return_value=resp)
 
         invaders = await client.get_city_invaders("PA", "Paris")
-        pa001 = next(inv for inv in invaders if inv.id == "PA_001")
+        pa001 = next(inv for inv in invaders if inv.id == "PA_1")
 
         assert pa001.install_date == date(2000, 1, 15)
 
@@ -154,7 +164,7 @@ class TestGetCityInvaders:
         client._session.get = MagicMock(return_value=resp)
 
         invaders = await client.get_city_invaders("PA", "Paris")
-        pa001 = next(inv for inv in invaders if inv.id == "PA_001")
+        pa001 = next(inv for inv in invaders if inv.id == "PA_1")
 
         assert pa001.points == 10
 
@@ -167,11 +177,11 @@ class TestGetCityInvaders:
         invaders = await client.get_city_invaders("PA", "Paris")
         flashable = [inv for inv in invaders if inv.is_flashable]
 
-        # PA_001 (A) and PA_002 (DG) are flashable
+        # PA_1 (A) and PA_2 (DG) are flashable
         assert len(flashable) == 2
         flashable_ids = {inv.id for inv in flashable}
-        assert "PA_001" in flashable_ids
-        assert "PA_002" in flashable_ids
+        assert "PA_1" in flashable_ids
+        assert "PA_2" in flashable_ids
 
     @pytest.mark.asyncio
     async def test_404_returns_empty(self, client: AwazleonClient) -> None:
