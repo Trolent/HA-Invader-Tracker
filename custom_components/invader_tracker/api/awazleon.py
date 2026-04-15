@@ -63,16 +63,23 @@ class AwazleonClient:
         except aiohttp.ClientError as err:
             raise InvaderSpotterConnectionError(f"Connection error: {err}") from err
 
-        cities_data = data.get("cities", {})
-        if not isinstance(cities_data, dict):
+        cities_wrapper = data.get("cities", {})
+        if not isinstance(cities_wrapper, dict):
             raise ParseError("Unexpected format from awazleon /cities/info")
+
+        # Structure: {"cities": {"number": N, "details": {"PA": {...}, ...}}}
+        cities_data = cities_wrapper.get("details", cities_wrapper)
+        if not isinstance(cities_data, dict):
+            raise ParseError("Unexpected 'cities' format from awazleon /cities/info")
 
         cities: list[City] = []
         for prefix, info in cities_data.items():
+            if not isinstance(info, dict):
+                continue
             cities.append(City(
                 code=prefix.upper(),
-                name=info.get("name", prefix),
-                country=info.get("country", ""),
+                name=str(info.get("name", prefix)),
+                country=str(info.get("country", "")),
             ))
 
         _LOGGER.debug("Fetched %d cities from awazleon", len(cities))
@@ -120,14 +127,13 @@ class AwazleonClient:
         except aiohttp.ClientError as err:
             raise InvaderSpotterConnectionError(f"Connection error: {err}") from err
 
-        # Response is a dict keyed by invader ref (e.g. {"PA_1": {...}, ...})
-        # Strip provider/timestamp wrapper if present
+        # Structure: {"provider": ..., "timestamp": ..., "city": ...,
+        #             "invadersState": {...}, "invaders": {"PA_01": {...}, ...}}
         invaders_data: dict = {}
         if isinstance(data, dict):
-            # Remove non-invader metadata keys
-            for key, value in data.items():
-                if key not in ("provider", "timestamp") and isinstance(value, dict):
-                    invaders_data[key] = value
+            invaders_data = data.get("invaders", {})
+            if not isinstance(invaders_data, dict):
+                invaders_data = {}
 
         if not invaders_data:
             _LOGGER.warning("No invaders found for city %s on awazleon", city_code)
@@ -146,6 +152,21 @@ class AwazleonClient:
             sum(1 for inv in invaders if inv.is_flashable),
         )
         return invaders
+
+    @staticmethod
+    def _normalize_id(ref: str) -> str:
+        """Normalize awazleon ID to match Flash Invader format.
+
+        Awazleon pads single-digit numbers (e.g. "PA_01"), while Flash Invader
+        does not (e.g. "PA_1"). Strip leading zeros from the numeric part so
+        IDs match across both sources.
+        """
+        ref_upper = ref.upper()
+        # Split on the last underscore to get prefix + number
+        parts = ref_upper.rsplit("_", 1)
+        if len(parts) == 2 and parts[1].isdigit():
+            return f"{parts[0]}_{int(parts[1])}"
+        return ref_upper
 
     def _parse_invader(
         self,
@@ -168,7 +189,7 @@ class AwazleonClient:
                     _LOGGER.debug("Could not parse invdate for %s: %s", ref, inv_date_str)
 
             return Invader(
-                id=ref.upper(),
+                id=self._normalize_id(ref),
                 city_code=city_code.upper(),
                 city_name=city_name or city_code,
                 points=int(data.get("pts", 0)),
