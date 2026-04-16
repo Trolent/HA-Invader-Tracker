@@ -538,13 +538,24 @@ class InvaderSpotterScraper:
         # Find all text content that contains news
         # The page structure has months as headers followed by day entries
         content = soup.get_text()
-        lines = content.split("\n")
+        raw_lines = content.split("\n")
 
-        for line in lines:
-            line = line.strip()
-            if not line:
+        # Merge continuation lines: a line that does NOT start with "DD :" or a month
+        # header is a continuation of the previous day entry (e.g. long "Ajout" lists).
+        merged_lines: list[str] = []
+        for raw in raw_lines:
+            stripped = raw.strip()
+            if not stripped:
                 continue
+            is_day_line = bool(re.match(r"^\d{1,2}\s*:", stripped))
+            is_month_line = bool(MONTH_PATTERN.search(stripped))
+            if (is_day_line or is_month_line) or not merged_lines:
+                merged_lines.append(stripped)
+            else:
+                # Continuation: append to previous line with a space
+                merged_lines[-1] = merged_lines[-1] + " " + stripped
 
+        for line in merged_lines:
             # Check for month header (e.g., "janvier 2026")
             month_match = MONTH_PATTERN.search(line)
             if month_match:
