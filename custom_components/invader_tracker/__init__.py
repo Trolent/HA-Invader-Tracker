@@ -111,9 +111,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Initialize processor (load previous snapshot)
     await processor.async_initialize()
 
-    # Initial data fetch
+    # Initial data fetch — Awazleon failure is non-fatal (coordinator will retry on schedule)
     _LOGGER.debug("Performing initial data fetch")
-    await spotter_coordinator.async_config_entry_first_refresh()
+    try:
+        await spotter_coordinator.async_config_entry_first_refresh()
+    except Exception:  # noqa: BLE001
+        _LOGGER.warning("Awazleon initial fetch failed, will retry on schedule")
     await flash_coordinator.async_config_entry_first_refresh()
     await profile_coordinator.async_config_entry_first_refresh()
 
