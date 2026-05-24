@@ -63,6 +63,7 @@ def mock_processor() -> MagicMock:
         reactivated_invaders=[],
     )
     processor.compute_city_stats = MagicMock(return_value=stats)
+    processor.get_flashed_for_city = MagicMock(return_value=flashed)
     return processor
 
 
