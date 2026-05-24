@@ -47,6 +47,7 @@ INTERVAL_OPTIONS: dict[str, str] = {
     "30": "Every 30 minutes",
     "60": "Every hour",
     "120": "Every 2 hours",
+    "240": "Every 4 hours",
     "360": "Every 6 hours",
     "720": "Every 12 hours",
     "1440": "Daily",
