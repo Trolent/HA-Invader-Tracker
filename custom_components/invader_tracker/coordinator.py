@@ -295,6 +295,10 @@ class FlashInvaderCoordinator(DataUpdateCoordinator[list[FlashedInvader]]):
         self._api = api
         self._flashed_by_city: dict[str, list[FlashedInvader]] = {}
 
+    def get_city_si_count(self, city_code: str) -> int | None:
+        """Return total SI count for a city from the Flash Invader API."""
+        return self._api.get_city_si_count(city_code)
+
     def get_flashed_for_city(self, city_code: str) -> list[FlashedInvader]:
         """Get flashed invaders for a specific city.
 

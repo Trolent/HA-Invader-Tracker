@@ -75,46 +75,77 @@ def mock_entry() -> MagicMock:
     return entry
 
 
+@pytest.fixture
+def mock_flash_coordinator() -> MagicMock:
+    """Create a mock flash coordinator."""
+    coordinator = MagicMock()
+    coordinator.last_update_success = True
+    coordinator.data = []
+    coordinator.get_city_si_count = MagicMock(return_value=1589)
+    return coordinator
+
+
 class TestInvaderTotalSensor:
     """Tests for InvaderTotalSensor."""
 
-    def test_native_value(self, mock_coordinator, mock_processor, mock_entry) -> None:
-        """Test total count."""
+    def test_native_value(self, mock_coordinator, mock_flash_coordinator, mock_processor, mock_entry) -> None:
+        """Test total count from awazleon."""
         sensor = InvaderTotalSensor(
-            mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
+            mock_coordinator, mock_flash_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
         assert sensor.native_value == 3
 
-    def test_attributes(self, mock_coordinator, mock_processor, mock_entry) -> None:
+    def test_native_value_fallback_to_flash_api(self, mock_coordinator, mock_flash_coordinator, mock_processor, mock_entry) -> None:
+        """Test total count falls back to Flash Invader API when awazleon is down."""
+        mock_coordinator.last_update_success = False
+        mock_coordinator.data = None
+        sensor = InvaderTotalSensor(
+            mock_coordinator, mock_flash_coordinator, mock_processor, mock_entry, "PA", "Paris"
+        )
+        assert sensor.native_value == 1589
+
+    def test_unavailable_when_both_down(self, mock_coordinator, mock_flash_coordinator, mock_processor, mock_entry) -> None:
+        """Test sensor returns None when both awazleon and flash API are down."""
+        mock_coordinator.last_update_success = False
+        mock_coordinator.data = None
+        mock_flash_coordinator.last_update_success = False
+        sensor = InvaderTotalSensor(
+            mock_coordinator, mock_flash_coordinator, mock_processor, mock_entry, "PA", "Paris"
+        )
+        assert sensor.native_value is None
+
+    def test_attributes(self, mock_coordinator, mock_flash_coordinator, mock_processor, mock_entry) -> None:
         """Test attributes include flashable count."""
         sensor = InvaderTotalSensor(
-            mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
+            mock_coordinator, mock_flash_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
         attrs = sensor.extra_state_attributes
 
         assert "flashable_count" in attrs
         assert attrs["flashable_count"] == 2  # PA_001 and PA_002
 
-    def test_unavailable(self, mock_coordinator, mock_processor, mock_entry) -> None:
+    def test_unavailable(self, mock_coordinator, mock_flash_coordinator, mock_processor, mock_entry) -> None:
         """Test sensor returns None when unavailable."""
         mock_coordinator.data = None
+        mock_coordinator.last_update_success = False
+        mock_flash_coordinator.last_update_success = False
         sensor = InvaderTotalSensor(
-            mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
+            mock_coordinator, mock_flash_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
         assert sensor.native_value is None
         assert sensor.extra_state_attributes == {}
 
-    def test_unique_id(self, mock_coordinator, mock_processor, mock_entry) -> None:
+    def test_unique_id(self, mock_coordinator, mock_flash_coordinator, mock_processor, mock_entry) -> None:
         """Test unique ID format."""
         sensor = InvaderTotalSensor(
-            mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
+            mock_coordinator, mock_flash_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
         assert sensor.unique_id == f"test_entry_PA_{SENSOR_TOTAL}"
 
-    def test_device_info(self, mock_coordinator, mock_processor, mock_entry) -> None:
+    def test_device_info(self, mock_coordinator, mock_flash_coordinator, mock_processor, mock_entry) -> None:
         """Test device info."""
         sensor = InvaderTotalSensor(
-            mock_coordinator, mock_processor, mock_entry, "PA", "Paris"
+            mock_coordinator, mock_flash_coordinator, mock_processor, mock_entry, "PA", "Paris"
         )
         info = sensor.device_info
         assert (DOMAIN, "test_entry_PA") in info["identifiers"]

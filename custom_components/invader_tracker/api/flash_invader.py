@@ -41,11 +41,22 @@ class FlashInvaderAPI:
         self._session = session
         self._uid = uid
         self._total_si_count: int = 0
+        # city_id (int) -> si_count, populated after get_flashed_invaders
+        self._si_count_by_city_id: dict[int, int] = {}
+        # city_id (int) -> city_code (str), derived from flashed invaders IDs
+        self._city_code_by_id: dict[int, str] = {}
 
     @property
     def total_si_count(self) -> int:
         """Return the total worldwide invader count (populated after get_flashed_invaders)."""
         return self._total_si_count
+
+    def get_city_si_count(self, city_code: str) -> int | None:
+        """Return total SI count for a city code, or None if unknown."""
+        for city_id, code in self._city_code_by_id.items():
+            if code == city_code:
+                return self._si_count_by_city_id.get(city_id)
+        return None
 
     @property
     def _headers(self) -> dict[str, str]:
@@ -140,6 +151,13 @@ class FlashInvaderAPI:
         # Cache global stats for use by get_player_profile
         self._total_si_count = int(data.get("total_si_count", 0))
 
+        # Parse per-city si_count from the cities list
+        self._si_count_by_city_id = {
+            int(c["id"]): int(c.get("si_count", 0))
+            for c in data.get("cities", [])
+            if isinstance(c, dict) and "id" in c
+        }
+
         invaders: list[FlashedInvader] = []
         for inv_id, inv_data in data["invaders"].items():
             try:
@@ -147,6 +165,13 @@ class FlashInvaderAPI:
                 invaders.append(invader)
             except (KeyError, TypeError, ValueError) as err:
                 _LOGGER.warning("Failed to parse invader %s: %s", inv_id, err)
+
+        # Build city_id -> city_code mapping from flashed invaders IDs (e.g. "PA_593" + city_id=1 -> 1:"PA")
+        for inv in invaders:
+            if inv.city_id not in self._city_code_by_id:
+                parts = inv.id.rsplit("_", 1)
+                if len(parts) == 2:
+                    self._city_code_by_id[inv.city_id] = parts[0]
 
         _LOGGER.debug("Parsed %d flashed invaders (total worldwide: %d)", len(invaders), self._total_si_count)
         return invaders
