@@ -79,6 +79,10 @@ class DataProcessor:
         self._news_events = await self._spotter.get_news_events(days=self._news_days)
         _LOGGER.debug("Refreshed news: %d events", len(self._news_events))
 
+    def get_flashed_for_city(self, city_code: str) -> list:
+        """Return flashed invaders for a city (from Flash Invader API only)."""
+        return self._flash.get_flashed_for_city(city_code)
+
     def compute_city_stats(self, city_code: str) -> CityStats:
         """Compute full statistics for a city.
 

@@ -23,7 +23,7 @@ from .const import (
 )
 
 if TYPE_CHECKING:
-    from .coordinator import InvaderSpotterCoordinator
+    from .coordinator import FlashInvaderCoordinator, InvaderSpotterCoordinator
     from .processor import DataProcessor
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,6 +41,7 @@ async def async_setup_entry(
     runtime_data = hass.data[DOMAIN][entry.entry_id]
 
     spotter_coordinator: InvaderSpotterCoordinator = runtime_data["spotter_coordinator"]
+    flash_coordinator: FlashInvaderCoordinator = runtime_data["flash_coordinator"]
     processor: DataProcessor = runtime_data["processor"]
     # Read from options first (modified config), then data (initial config)
     cities: dict[str, str] = entry.options.get(CONF_CITIES) or entry.data.get(CONF_CITIES, {})
@@ -61,7 +62,7 @@ async def async_setup_entry(
                     spotter_coordinator, processor, entry, city_code, city_name
                 ),
                 InvaderFlashedSensor(
-                    spotter_coordinator, processor, entry, city_code, city_name
+                    flash_coordinator, processor, entry, city_code, city_name
                 ),
                 InvaderUnflashedSensor(
                     spotter_coordinator, processor, entry, city_code, city_name
@@ -175,33 +176,52 @@ class InvaderTotalSensor(InvaderBaseSensor):
         }
 
 
-class InvaderFlashedSensor(InvaderBaseSensor):
-    """Sensor for flashed invaders in a city."""
+class InvaderFlashedSensor(CoordinatorEntity, SensorEntity):
+    """Sensor for flashed invaders in a city — depends only on Flash Invader API."""
 
+    _attr_has_entity_name = True
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:check-circle"
     _attr_translation_key = "flashed"
 
     def __init__(
         self,
-        coordinator: InvaderSpotterCoordinator,
+        coordinator: FlashInvaderCoordinator,
         processor: DataProcessor,
         entry: ConfigEntry,
         city_code: str,
         city_name: str,
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(
-            coordinator, processor, entry, city_code, city_name, SENSOR_FLASHED
-        )
+        super().__init__(coordinator)
+        self._processor = processor
+        self._entry = entry
+        self._city_code = city_code
+        self._city_name = city_name
+        self._attr_unique_id = f"{entry.entry_id}_{city_code}_{SENSOR_FLASHED}"
         self._attr_name = "Flashed"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"{self._entry.entry_id}_{self._city_code}")},
+            name=f"City - {self._city_name}",
+            manufacturer="Space Invader",
+            model="City Tracker",
+        )
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.coordinator.last_update_success and self.coordinator.data is not None
 
     @property
     def native_value(self) -> int | None:
         """Return the state of the sensor."""
         if not self.available:
             return None
-        stats = self._processor.compute_city_stats(self._city_code)
-        return stats.flashed_count
+        return len(self._processor.get_flashed_for_city(self._city_code))
 
 
 class InvaderUnflashedSensor(InvaderBaseSensor):
