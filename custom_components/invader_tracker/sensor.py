@@ -59,7 +59,7 @@ async def async_setup_entry(
         entities.extend(
             [
                 InvaderTotalSensor(
-                    spotter_coordinator, processor, entry, city_code, city_name
+                    spotter_coordinator, flash_coordinator, processor, entry, city_code, city_name
                 ),
                 InvaderFlashedSensor(
                     flash_coordinator, processor, entry, city_code, city_name
@@ -146,6 +146,7 @@ class InvaderTotalSensor(InvaderBaseSensor):
     def __init__(
         self,
         coordinator: InvaderSpotterCoordinator,
+        flash_coordinator: FlashInvaderCoordinator,
         processor: DataProcessor,
         entry: ConfigEntry,
         city_code: str,
@@ -155,20 +156,33 @@ class InvaderTotalSensor(InvaderBaseSensor):
         super().__init__(
             coordinator, processor, entry, city_code, city_name, SENSOR_TOTAL
         )
+        self._flash_coordinator = flash_coordinator
         self._attr_name = "Total Invaders"
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available — awazleon or flash invader API is enough."""
+        if super().available:
+            return True
+        return (
+            self._flash_coordinator.last_update_success
+            and self._flash_coordinator.get_city_si_count(self._city_code) is not None
+        )
 
     @property
     def native_value(self) -> int | None:
         """Return the state of the sensor."""
         if not self.available:
             return None
-        stats = self._processor.compute_city_stats(self._city_code)
-        return stats.total_count
+        if super().available:
+            stats = self._processor.compute_city_stats(self._city_code)
+            return stats.total_count
+        return self._flash_coordinator.get_city_si_count(self._city_code)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
-        if not self.available:
+        if not super().available:
             return {}
         stats = self._processor.compute_city_stats(self._city_code)
         return {
