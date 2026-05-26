@@ -8,7 +8,7 @@
 
 Track [Space Invader](https://www.space-invaders.com/) street art mosaics in Home Assistant. This integration combines data from:
 
-- **[awazleon.space](https://www.awazleon.space/)** — REST API with full invader data per city (status, points, install date)
+- **[awazleon.space](https://www.awazleon.space/)** — REST API with full invader data per city (status, points, install date). **Requires an API key** — request one at [www.awazleon.space](https://www.awazleon.space/) or via the Space Invaders Discord. Optional: leaving it blank disables this source gracefully.
 - **[invader-spotter.art](https://www.invader-spotter.art/)** — News feed for new and reactivated invaders
 - **Flash Invader API** — Your personal collection via your account UID
 
@@ -59,8 +59,9 @@ Invader Tracker is a comprehensive Home Assistant integration that helps you tra
 1. Go to **Settings** → **Devices & Services**
 2. Click **+ Add Integration** and search for "Invader Tracker"
 3. Enter your Flash Invader UID
-4. Select cities to track
-5. Choose your update interval
+4. Enter your **Awazleon API key** (optional — leave blank to disable Awazleon data). Request a key at [www.awazleon.space](https://www.awazleon.space/) or via the Space Invaders Discord.
+5. Select cities to track
+6. Choose your update interval
 
 ### Finding Your Flash Invader UID
 
@@ -148,7 +149,8 @@ Accessible via **Settings → Devices & Services → Invader Tracker → Configu
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | **Cities** | Multi-select | — | Cities to track (required) |
-| **Update interval** | Dropdown + custom | 1 hour | Refresh interval for all data sources (awazleon, Flash API, news). Predefined values: 15 min, 30 min, 1h, 2h, 6h, 12h, daily, weekly, monthly. Or enter a custom value in minutes (min. 15). |
+| **Awazleon API Key** | Text | — | API key for awazleon.space. Leave blank to disable Awazleon data. Request at [www.awazleon.space](https://www.awazleon.space/) or via the Space Invaders Discord. |
+| **Update interval** | Dropdown + custom | 4 hours | Refresh interval for all data sources (awazleon, Flash API, news). Predefined values: 15 min, 30 min, 1h, 2h, 4h, 6h, 12h, daily, weekly, monthly. Or enter a custom value in minutes (min. 15). |
 | **News Days** | Dropdown | 30 days | How many days of news history to consider for new/reactivated detection |
 | **New city detection window** | Dropdown | 1 week | How long `New City Invaded` stays active after a new city is first detected |
 | **Track followed players** | Toggle | Enabled | Create devices for players you follow. Disable to skip the extra API call. |
@@ -242,10 +244,18 @@ automation:
 2. Check logs for "Rate limited" or connection errors
 3. Force a refresh: **Developer Tools → Services → `homeassistant.update_entity`**
 
+### No Invader Data (Awazleon Disabled)
+
+If city sensors show no invader data, Awazleon may be disabled (no API key configured) or the key may be invalid.
+
+1. Go to **Settings → Devices & Services → Invader Tracker → Configure**
+2. Enter or update your Awazleon API key
+3. Request a key at [www.awazleon.space](https://www.awazleon.space/) or via the **Space Invaders Discord**
+
 ### "No Cities Found" During Setup
 
-1. awazleon.space may be temporarily unreachable
-2. Try again after a few minutes
+1. Verify your Awazleon API key is valid — without it the city list cannot be fetched
+2. awazleon.space may be temporarily unreachable — try again after a few minutes
 3. Check [GitHub Issues](https://github.com/Trolent/HA-Invader-Tracker/issues) for known problems
 
 ### Enable Debug Logging

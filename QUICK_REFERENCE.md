@@ -265,6 +265,7 @@ logger:
 | Issue | Solution |
 |-------|----------|
 | Sensors show "unavailable" | Check logs for connection errors |
+| No city invader data | Awazleon may be disabled — add API key in options (request at awazleon.space or Space Invaders Discord) |
 | No new invader alert | Verify `binary_sensor.world_has_new` exists |
 | New city sensor always None | First run populates baseline — new cities detected on next refresh |
 | Updates not happening | Check update interval in options |

@@ -142,13 +142,21 @@ You'll be prompted to enter your Flash Invader UID.
 **⚠️ Security Warning:**
 Never share your UID publicly. It grants access to your Flash Invader account. If compromised, change it immediately in the Flash Invader app settings.
 
-### Step 2: Select Cities
+### Step 2: Enter Your Awazleon API Key (Optional)
 
-After entering your UID, you'll see a list of available cities:
+After validating your UID, you'll be asked for an **Awazleon API key**:
 
-1. The integration automatically discovers cities from invader-spotter.art
-2. Select the cities you want to track (use Ctrl/Cmd for multiple selections)
-3. You can change this later in integration options
+- The key enables full invader data per city (status, points, install date) from [awazleon.space](https://www.awazleon.space/)
+- **Leave it blank** to skip — the integration will still work using your Flash Invader personal data and the invader-spotter.art news feed, but city-level invader counts will be unavailable
+- To obtain a key: request it at **[www.awazleon.space](https://www.awazleon.space/)** or via the **Space Invaders Discord server**
+- You can add or change the key later via **Settings → Devices & Services → Invader Tracker → Configure**
+
+### Step 3: Select Cities
+
+After the API key step, you'll see a list of available cities (fetched from awazleon.space if a key was provided):
+
+1. Select the cities you want to track (use Ctrl/Cmd for multiple selections)
+2. You can change this later in integration options
 
 **Recommendations:**
 - Start with 1-2 cities for testing
@@ -269,10 +277,11 @@ Create a simple notification automation to test:
 ### "No Cities Found" Error
 
 **Solution:**
-1. Verify internet connectivity
-2. Check if invader-spotter.art is accessible
-3. Try again - website may be temporarily down
-4. Check GitHub issues for known problems
+1. Verify your Awazleon API key is entered and valid — without it, no city list can be fetched
+2. Request a key at [www.awazleon.space](https://www.awazleon.space/) or via the Space Invaders Discord
+3. Verify internet connectivity
+4. Try again — awazleon.space may be temporarily down
+5. Check GitHub issues for known problems
 
 ## Update Installation
 

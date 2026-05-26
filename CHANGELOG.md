@@ -5,6 +5,23 @@ All notable changes to the Invader Tracker integration will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-05-26
+
+### Added
+
+- **Awazleon API key support** — awazleon.space now requires authentication. A new optional setup step prompts for your API key during initial configuration and in the options flow. The key is sent as the `X-API-Key` header on all requests.
+- **Graceful degradation without API key** — leaving the key blank disables the Awazleon data source entirely (no error, no blocked startup). Only your personal Flash Invader data and the invader-spotter.art news feed remain active.
+
+> **Obtaining an API key:** Request it directly at [www.awazleon.space](https://www.awazleon.space/) or via the **Space Invaders Discord server**.
+
+### Removed
+
+- Dead code cleanup: `async_force_refresh_city`, `StateSnapshot.was_previously_destroyed`, `ChangeSet.newly_destroyed` (unused internally, never called externally)
+
+### Fixed
+
+- `Invaders To Flash` text sensors returned the hardcoded string `"Aucun"` when empty — now correctly returns `None` (unavailable state), which is the proper HA convention
+
 ## [2.5.3] - 2026-04-16
 
 ### Fixed
