@@ -37,7 +37,7 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
     def __init__(
         self,
         hass: HomeAssistant,
-        awazleon: AwazleonClient,
+        awazleon: AwazleonClient | None,
         scraper: InvaderSpotterScraper,
         cities: dict[str, str],
         update_interval_minutes: int,
@@ -46,7 +46,7 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
 
         Args:
             hass: Home Assistant instance
-            awazleon: Awazleon REST API client (invader data)
+            awazleon: Awazleon REST API client, or None if no API key is configured
             scraper: Invader Spotter scraper (news only)
             cities: Dict mapping city codes to names
             update_interval_minutes: Minutes between updates
@@ -124,6 +124,10 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
 
     async def _async_update_data(self) -> dict[str, list[Invader]]:
         """Fetch invader data from awazleon, using cache for unchanged cities."""
+        if self._awazleon is None:
+            _LOGGER.debug("Awazleon disabled (no API key) — skipping update")
+            return self.data or {}
+
         _LOGGER.debug("Starting awazleon update for %d cities", len(self._cities))
 
         # Refresh the global city list for new-city detection
@@ -139,15 +143,13 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
         scraped_count = 0
 
         for city_code, city_name in self._cities.items():
-            # Check if we can use cached data
             if self._is_cache_valid(city_code):
                 _, cached_invaders = self._city_cache[city_code]
                 result[city_code] = cached_invaders
                 cached_count += 1
                 _LOGGER.debug("Using cached data for %s (%d invaders)", city_code, len(cached_invaders))
                 continue
-            
-            # Polite delay between requests (except first scrape)
+
             if scraped_count > 0:
                 try:
                     await asyncio.sleep(CITY_REQUEST_DELAY)
@@ -157,11 +159,8 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
             try:
                 invaders = await self._awazleon.get_city_invaders(city_code, city_name)
                 result[city_code] = invaders
-
-                # Update cache
                 self._city_cache[city_code] = (datetime.now(), invaders)
                 scraped_count += 1
-
                 _LOGGER.debug(
                     "Fetched %s from awazleon: %d invaders (%d flashable)",
                     city_code,
@@ -173,21 +172,17 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
                 _LOGGER.warning("Failed to fetch %s from awazleon: %s", city_code, err)
                 failures.append(city_code)
 
-                # Use cached data if available (even if expired)
                 if city_code in self._city_cache:
                     _, cached_invaders = self._city_cache[city_code]
                     result[city_code] = cached_invaders
                     _LOGGER.info("Using expired cache for %s", city_code)
-                # Or use previous coordinator data
                 elif self.data and city_code in self.data:
                     result[city_code] = self.data[city_code]
                     _LOGGER.info("Using previous data for %s", city_code)
 
-        # If ALL cities failed and no cached data, raise UpdateFailed
         if len(failures) == len(self._cities) and not result:
-            raise UpdateFailed(f"Failed to scrape any cities: {', '.join(failures)}")
+            raise UpdateFailed(f"Failed to fetch any cities: {', '.join(failures)}")
 
-        # Log summary
         total_invaders = sum(len(inv) for inv in result.values())
         if failures:
             _LOGGER.warning(
@@ -201,22 +196,6 @@ class InvaderSpotterCoordinator(DataUpdateCoordinator[dict[str, list[Invader]]])
             )
 
         return result
-    
-    async def async_force_refresh_city(self, city_code: str) -> None:
-        """Force refresh a specific city, bypassing cache.
-        
-        Args:
-            city_code: City code to refresh
-        """
-        if city_code not in self._cities:
-            _LOGGER.warning("Cannot refresh unknown city: %s", city_code)
-            return
-        
-        # Invalidate cache for this city
-        self._city_cache.pop(city_code, None)
-        
-        # Trigger a refresh
-        await self.async_request_refresh()
 
     async def get_news_events(self, days: int = 30) -> list[NewsEvent]:
         """Get news events from invader-spotter.art/news.php.

@@ -16,6 +16,7 @@ from .api.awazleon import AwazleonClient
 from .api.flash_invader import FlashInvaderAPI
 from .const import (
     CONF_API_INTERVAL,
+    CONF_AWAZLEON_API_KEY,
     CONF_CITIES,
     CONF_NEW_CITY_DAYS,
     CONF_NEWS_DAYS,
@@ -120,6 +121,7 @@ class InvaderTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         """Initialize the config flow."""
         self._uid: str = ""
+        self._awazleon_api_key: str = ""
         self._cities: dict[str, str] = {}
         self._pending_data: dict[str, Any] = {}
 
@@ -156,12 +158,30 @@ class InvaderTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
 
                 if not errors:
                     self._uid = uid
-                    return await self.async_step_cities()
+                    return await self.async_step_awazleon_key()
 
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({vol.Required(CONF_UID): str}),
             errors=errors,
+        )
+
+    async def async_step_awazleon_key(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle the optional Awazleon API key step.
+
+        Leaving the key blank disables Awazleon data entirely.
+        """
+        if user_input is not None:
+            self._awazleon_api_key = (user_input.get(CONF_AWAZLEON_API_KEY) or "").strip()
+            return await self.async_step_cities()
+
+        return self.async_show_form(
+            step_id="awazleon_key",
+            data_schema=vol.Schema({
+                vol.Optional(CONF_AWAZLEON_API_KEY, default=""): str,
+            }),
         )
 
     async def async_step_cities(
@@ -183,6 +203,7 @@ class InvaderTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
 
                 self._pending_data = {
                     CONF_UID: self._uid,
+                    CONF_AWAZLEON_API_KEY: self._awazleon_api_key,
                     CONF_CITIES: cities,
                 }
 
@@ -199,20 +220,20 @@ class InvaderTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
                     data=self._pending_data,
                 )
 
-        # Fetch available cities from awazleon
-        session = async_get_clientsession(self.hass)
-        awazleon = AwazleonClient(session)
+        # Fetch available cities from awazleon (only if an API key was provided)
+        if self._awazleon_api_key:
+            session = async_get_clientsession(self.hass)
+            awazleon = AwazleonClient(session, self._awazleon_api_key)
+            try:
+                cities_list = await awazleon.get_cities()
+                self._cities = {c.code: c.name for c in cities_list}
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Unexpected error fetching cities")
+                errors["base"] = "cannot_connect_spotter"
+                self._cities = {}
 
-        try:
-            cities_list = await awazleon.get_cities()
-            self._cities = {c.code: c.name for c in cities_list}
-        except Exception:  # noqa: BLE001
-            _LOGGER.exception("Unexpected error fetching cities")
-            errors["base"] = "cannot_connect_spotter"
-            self._cities = {}
-
-        if not self._cities and not errors:
-            errors["base"] = "no_cities_found"
+            if not self._cities and not errors:
+                errors["base"] = "no_cities_found"
 
         city_options = dict(sorted(self._cities.items(), key=lambda x: x[1]))
 
@@ -361,8 +382,10 @@ class InvaderTrackerOptionsFlow(OptionsFlow):
                 news_val = user_input.get(CONF_NEWS_DAYS, str(DEFAULT_NEWS_DAYS))
                 new_city_val = user_input.get(CONF_NEW_CITY_DAYS, str(DEFAULT_NEW_CITY_DAYS))
 
+                api_key = (user_input.get(CONF_AWAZLEON_API_KEY) or "").strip()
                 self._pending_options = {
                     CONF_CITIES: cities,
+                    CONF_AWAZLEON_API_KEY: api_key,
                     CONF_NEWS_DAYS: int(news_val),
                     CONF_NEW_CITY_DAYS: int(new_city_val),
                     CONF_TRACK_FOLLOWED: user_input.get(
@@ -377,15 +400,18 @@ class InvaderTrackerOptionsFlow(OptionsFlow):
                 self._pending_options[CONF_UPDATE_INTERVAL] = int(chosen_val)
                 return self.async_create_entry(title="", data=self._pending_options)
 
-        # Fetch available cities from awazleon
-        session = async_get_clientsession(self.hass)
-        awazleon = AwazleonClient(session)
-
-        try:
-            cities_list = await awazleon.get_cities()
-            self._cities = {c.code: c.name for c in cities_list}
-        except Exception:  # noqa: BLE001
-            _LOGGER.exception("Error fetching cities for options")
+        # Fetch available cities from awazleon (only if an API key is configured)
+        current_api_key = self._get_current_value(CONF_AWAZLEON_API_KEY, "")
+        if current_api_key:
+            session = async_get_clientsession(self.hass)
+            awazleon = AwazleonClient(session, current_api_key)
+            try:
+                cities_list = await awazleon.get_cities()
+                self._cities = {c.code: c.name for c in cities_list}
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Error fetching cities for options")
+                self._cities = self._get_current_cities()
+        else:
             self._cities = self._get_current_cities()
 
         current_cities = list(self._get_current_cities().keys())
@@ -400,6 +426,10 @@ class InvaderTrackerOptionsFlow(OptionsFlow):
                 vol.Required(
                     CONF_CITIES, default=current_cities
                 ): cv.multi_select(city_options),
+                vol.Optional(
+                    CONF_AWAZLEON_API_KEY,
+                    default=self._get_current_value(CONF_AWAZLEON_API_KEY, ""),
+                ): str,
                 vol.Required(
                     CONF_UPDATE_INTERVAL,
                     default=_interval_default(current_interval),

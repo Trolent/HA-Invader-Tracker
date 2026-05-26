@@ -26,9 +26,10 @@ STATE_MAPPING: dict[str, InvaderStatus] = {
 class AwazleonClient:
     """Client for the awazleon.space REST API."""
 
-    def __init__(self, session: aiohttp.ClientSession) -> None:
+    def __init__(self, session: aiohttp.ClientSession, api_key: str = "") -> None:
         """Initialize the client."""
         self._session = session
+        self._headers = {"X-API-Key": api_key} if api_key else {}
 
     async def get_cities(self) -> list[City]:
         """Fetch the list of all cities from awazleon.
@@ -47,6 +48,7 @@ class AwazleonClient:
         try:
             async with self._session.get(
                 url,
+                headers=self._headers,
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as response:
                 if response.status != 200:
@@ -106,6 +108,7 @@ class AwazleonClient:
         try:
             async with self._session.get(
                 url,
+                headers=self._headers,
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as response:
                 if response.status == 404:

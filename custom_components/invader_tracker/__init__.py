@@ -13,6 +13,7 @@ from .api.flash_invader import FlashInvaderAPI
 from .api.invader_spotter import InvaderSpotterScraper
 from .const import (
     CONF_API_INTERVAL,
+    CONF_AWAZLEON_API_KEY,
     CONF_CITIES,
     CONF_NEW_CITY_DAYS,
     CONF_NEWS_DAYS,
@@ -79,7 +80,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Create API clients
     flash_api = FlashInvaderAPI(session, uid)
-    awazleon_client = AwazleonClient(session)
+    awazleon_api_key = entry.options.get(
+        CONF_AWAZLEON_API_KEY,
+        entry.data.get(CONF_AWAZLEON_API_KEY, ""),
+    )
+    awazleon_client = AwazleonClient(session, awazleon_api_key) if awazleon_api_key else None
+    if not awazleon_api_key:
+        _LOGGER.info("No Awazleon API key configured — Awazleon data source disabled")
     spotter_scraper = InvaderSpotterScraper(session)
 
     # Create coordinators (all share the same update interval)

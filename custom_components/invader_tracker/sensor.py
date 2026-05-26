@@ -387,7 +387,5 @@ class InvaderToFlashSensor(CoordinatorEntity, SensorEntity):
         stats = self._processor.compute_city_stats(self._city_code)
         to_flash_ids = [inv.id for inv in stats.unflashed_new] + \
                        [inv.id for inv in stats.unflashed_reactivated]
-        if not to_flash_ids:
-            return "Aucun"
-        return ", ".join(to_flash_ids)
+        return ", ".join(to_flash_ids) if to_flash_ids else None
 

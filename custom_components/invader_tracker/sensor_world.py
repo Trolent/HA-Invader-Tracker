@@ -226,7 +226,7 @@ class WorldToFlashSensor(CoordinatorEntity, SensorEntity):
             [inv.id for inv in stats.unflashed_new]
             + [inv.id for inv in stats.unflashed_reactivated]
         )
-        return ", ".join(to_flash_ids) if to_flash_ids else "Aucun"
+        return ", ".join(to_flash_ids) if to_flash_ids else None
 
 
 class WorldNewCitySensor(CoordinatorEntity, SensorEntity):

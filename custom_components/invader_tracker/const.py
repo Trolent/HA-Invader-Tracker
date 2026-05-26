@@ -10,6 +10,7 @@ CONF_UPDATE_INTERVAL: Final = "update_interval"  # minutes, applies to all data 
 CONF_NEWS_DAYS: Final = "news_days"
 CONF_NEW_CITY_DAYS: Final = "new_city_days"
 CONF_TRACK_FOLLOWED: Final = "track_followed"
+CONF_AWAZLEON_API_KEY: Final = "awazleon_api_key"
 
 # Kept for migration of existing entries
 CONF_SCRAPE_INTERVAL: Final = "scrape_interval"

@@ -223,19 +223,12 @@ class StateSnapshot:
                 reactivated.append(inv)
         return reactivated
 
-    def was_previously_destroyed(self, invader_id: str) -> bool:
-        """Check if invader was previously in a non-flashable state."""
-        non_flashable = {InvaderStatus.DESTROYED, InvaderStatus.NOT_VISIBLE, InvaderStatus.UNKNOWN}
-        return self.previous_status.get(invader_id) in non_flashable
-
-
 @dataclass
 class ChangeSet:
     """Changes detected since last snapshot."""
 
     new_invaders: list[Invader] = field(default_factory=list)
     reactivated_invaders: list[Invader] = field(default_factory=list)
-    newly_destroyed: list[Invader] = field(default_factory=list)
 
 
 @dataclass

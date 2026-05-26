@@ -8,6 +8,13 @@
           "uid": "Flash Invader UID"
         }
       },
+      "awazleon_key": {
+        "title": "Awazleon API Key (Optional)",
+        "description": "Enter your Awazleon API key to enable invader status data. Leave blank to disable Awazleon — only your personal Flash Invader data will be used.",
+        "data": {
+          "awazleon_api_key": "Awazleon API Key"
+        }
+      },
       "cities": {
         "title": "Select Cities & Interval",
         "description": "Choose which cities to track and how often to refresh data.",
@@ -52,6 +59,7 @@
         "description": "Configure which cities to track and how often to refresh data.",
         "data": {
           "cities": "Cities to track",
+          "awazleon_api_key": "Awazleon API Key (leave blank to disable)",
           "update_interval": "Update interval",
           "news_days": "News history (new/reactivated detection period)",
           "new_city_days": "New city detection window",
