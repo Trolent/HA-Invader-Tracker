@@ -51,6 +51,7 @@
         "title": "Options Invader Tracker",
         "description": "Configurez les villes à suivre et la fréquence de rafraîchissement.",
         "data": {
+          "uid": "UID Flash Invader",
           "cities": "Villes à suivre",
           "update_interval": "Intervalle de mise à jour",
           "news_days": "Historique des news (période de détection nouveau/réactivé)",
@@ -67,7 +68,11 @@
       }
     },
     "error": {
-      "no_cities_selected": "Veuillez sélectionner au moins une ville à suivre."
+      "no_cities_selected": "Veuillez sélectionner au moins une ville à suivre.",
+      "invalid_uid": "UID invalide. Veuillez vérifier et réessayer.",
+      "invalid_uid_format": "L'UID doit être au format UUID (ex: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX).",
+      "cannot_connect": "Impossible de se connecter aux serveurs Flash Invader. Vérifiez votre connexion internet.",
+      "unknown": "Une erreur inattendue s'est produite. Veuillez réessayer."
     }
   },
   "entity": {

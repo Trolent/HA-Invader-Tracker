@@ -47,11 +47,19 @@
     }
   },
   "options": {
+    "error": {
+      "no_cities_selected": "Please select at least one city to track.",
+      "invalid_uid": "Invalid UID. Please check and try again.",
+      "invalid_uid_format": "UID must be in UUID format (e.g., XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX).",
+      "cannot_connect": "Cannot connect to Flash Invader servers. Check your internet connection.",
+      "unknown": "An unexpected error occurred. Please try again."
+    },
     "step": {
       "init": {
         "title": "Invader Tracker Options",
         "description": "Configure which cities to track and update frequencies.",
         "data": {
+          "uid": "Flash Invader UID",
           "cities": "Cities to track",
           "awazleon_api_key": "Awazleon API Key (leave blank to disable)",
           "scrape_interval": "Invader-Spotter update frequency",
@@ -60,9 +68,6 @@
           "track_followed": "Track followed players"
         }
       }
-    },
-    "error": {
-      "no_cities_selected": "Please select at least one city to track."
     }
   },
   "entity": {

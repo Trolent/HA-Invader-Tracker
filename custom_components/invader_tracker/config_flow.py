@@ -369,36 +369,61 @@ class InvaderTrackerOptionsFlow(OptionsFlow):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            uid = (user_input.get(CONF_UID) or "").strip()
             selected_cities = user_input.get(CONF_CITIES, [])
 
-            if not selected_cities:
+            if not _validate_uid(uid):
+                errors[CONF_UID] = "invalid_uid_format"
+            elif not selected_cities:
                 errors["base"] = "no_cities_selected"
             else:
-                cities = {
-                    code: self._cities.get(code, code) for code in selected_cities
-                }
-                chosen_val = user_input.get(CONF_UPDATE_INTERVAL, _CUSTOM_SENTINEL)
-                # news_days and new_city_days are stored as str from SelectSelector → convert to int
-                news_val = user_input.get(CONF_NEWS_DAYS, str(DEFAULT_NEWS_DAYS))
-                new_city_val = user_input.get(CONF_NEW_CITY_DAYS, str(DEFAULT_NEW_CITY_DAYS))
+                current_uid = self._config_entry.data.get(CONF_UID, "")
+                if uid.upper() != current_uid.upper():
+                    session = async_get_clientsession(self.hass)
+                    api = FlashInvaderAPI(session, uid)
+                    try:
+                        await api.get_flashed_invaders()
+                    except AuthenticationError:
+                        errors[CONF_UID] = "invalid_uid"
+                    except InvaderTrackerConnectionError:
+                        errors[CONF_UID] = "cannot_connect"
+                    except Exception:  # noqa: BLE001
+                        _LOGGER.exception("Unexpected error validating UID")
+                        errors[CONF_UID] = "unknown"
 
-                api_key = (user_input.get(CONF_AWAZLEON_API_KEY) or "").strip()
-                self._pending_options = {
-                    CONF_CITIES: cities,
-                    CONF_AWAZLEON_API_KEY: api_key,
-                    CONF_NEWS_DAYS: int(news_val),
-                    CONF_NEW_CITY_DAYS: int(new_city_val),
-                    CONF_TRACK_FOLLOWED: user_input.get(
-                        CONF_TRACK_FOLLOWED,
-                        self._get_current_value(CONF_TRACK_FOLLOWED, DEFAULT_TRACK_FOLLOWED),
-                    ),
-                }
+                if not errors:
+                    cities = {
+                        code: self._cities.get(code, code) for code in selected_cities
+                    }
+                    chosen_val = user_input.get(CONF_UPDATE_INTERVAL, _CUSTOM_SENTINEL)
+                    # news_days and new_city_days are stored as str from SelectSelector → convert to int
+                    news_val = user_input.get(CONF_NEWS_DAYS, str(DEFAULT_NEWS_DAYS))
+                    new_city_val = user_input.get(CONF_NEW_CITY_DAYS, str(DEFAULT_NEW_CITY_DAYS))
 
-                if chosen_val == _CUSTOM_SENTINEL:
-                    return await self.async_step_custom_interval()
+                    api_key = (user_input.get(CONF_AWAZLEON_API_KEY) or "").strip()
+                    self._pending_options = {
+                        CONF_CITIES: cities,
+                        CONF_AWAZLEON_API_KEY: api_key,
+                        CONF_NEWS_DAYS: int(news_val),
+                        CONF_NEW_CITY_DAYS: int(new_city_val),
+                        CONF_TRACK_FOLLOWED: user_input.get(
+                            CONF_TRACK_FOLLOWED,
+                            self._get_current_value(CONF_TRACK_FOLLOWED, DEFAULT_TRACK_FOLLOWED),
+                        ),
+                    }
 
-                self._pending_options[CONF_UPDATE_INTERVAL] = int(chosen_val)
-                return self.async_create_entry(title="", data=self._pending_options)
+                    if uid.upper() != current_uid.upper():
+                        self.hass.config_entries.async_update_entry(
+                            self._config_entry,
+                            unique_id=uid.upper(),
+                            data={**self._config_entry.data, CONF_UID: uid},
+                        )
+
+                    if chosen_val == _CUSTOM_SENTINEL:
+                        return await self.async_step_custom_interval()
+
+                    self._pending_options[CONF_UPDATE_INTERVAL] = int(chosen_val)
+                    return self.async_create_entry(title="", data=self._pending_options)
 
         # Fetch available cities from awazleon (only if an API key is configured)
         current_api_key = self._get_current_value(CONF_AWAZLEON_API_KEY, "")
@@ -420,9 +445,12 @@ class InvaderTrackerOptionsFlow(OptionsFlow):
         current_new_city_days = self._get_current_value(CONF_NEW_CITY_DAYS, DEFAULT_NEW_CITY_DAYS)
         city_options = dict(sorted(self._cities.items(), key=lambda x: x[1]))
 
+        current_uid = self._config_entry.data.get(CONF_UID, "")
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
+                vol.Required(CONF_UID, default=current_uid): str,
                 vol.Required(
                     CONF_CITIES, default=current_cities
                 ): cv.multi_select(city_options),

@@ -58,6 +58,7 @@
         "title": "Invader Tracker Options",
         "description": "Configure which cities to track and how often to refresh data.",
         "data": {
+          "uid": "Flash Invader UID",
           "cities": "Cities to track",
           "awazleon_api_key": "Awazleon API Key (leave blank to disable)",
           "update_interval": "Update interval",
@@ -75,7 +76,11 @@
       }
     },
     "error": {
-      "no_cities_selected": "Please select at least one city to track."
+      "no_cities_selected": "Please select at least one city to track.",
+      "invalid_uid": "Invalid UID. Please check and try again.",
+      "invalid_uid_format": "UID must be in UUID format (e.g., XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX).",
+      "cannot_connect": "Cannot connect to Flash Invader servers. Check your internet connection.",
+      "unknown": "An unexpected error occurred. Please try again."
     }
   },
   "entity": {
